@@ -1,6 +1,6 @@
 // Vault Doctor — EMPTY-NOTE rule.
-// Emits one warning per note whose on-disk size is below a small threshold,
-// as a cheap proxy for "no real content beyond frontmatter".
+// Emits one warning per note whose body (content excluding YAML frontmatter)
+// is below a small character threshold.
 
 import type { Issue, Rule, ScanContext } from "../types";
 
@@ -9,8 +9,8 @@ import type { Issue, Rule, ScanContext } from "../types";
 // expected to be sparse.
 const PATH_EXCLUSIONS: readonly string[] = ["templates/", "_archive/"];
 
-// TODO: replace with bodyLength once Scanner exposes it
-const SIZE_THRESHOLD_BYTES = 200;
+// PRD §5.1.A5: "< 50 characters or no content other than frontmatter".
+const BODY_LENGTH_THRESHOLD = 50;
 
 export const EMPTY_NOTE_RULE: Rule = {
   id: "EMPTY-NOTE",
@@ -22,8 +22,7 @@ export const EMPTY_NOTE_RULE: Rule = {
   evaluate(ctx: ScanContext): Issue[] {
     const issues: Issue[] = [];
     for (const note of ctx.vault.notes.values()) {
-      // TODO: replace with bodyLength once Scanner exposes it
-      if (note.size >= SIZE_THRESHOLD_BYTES) continue;
+      if (note.bodyLength >= BODY_LENGTH_THRESHOLD) continue;
 
       const lowerPath = note.path.toLowerCase();
       let excludedByPath = false;
@@ -39,7 +38,7 @@ export const EMPTY_NOTE_RULE: Rule = {
         ruleId: EMPTY_NOTE_RULE.id,
         severity: EMPTY_NOTE_RULE.severity,
         notePath: note.path,
-        message: `Empty or near-empty note (${note.size} bytes)`,
+        message: `Empty or near-empty note (${note.bodyLength} chars)`,
         suggestedAction: "archive",
       });
     }

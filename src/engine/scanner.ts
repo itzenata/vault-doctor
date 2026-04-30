@@ -45,6 +45,7 @@ export class Scanner {
 
     for (const file of mdFiles) {
       const content = await app.vault.cachedRead(file);
+      const body = stripFrontmatter(content);
       const rawLinks = parseLinks(file.path, content);
 
       // resolve each link via metadataCache
@@ -67,6 +68,7 @@ export class Scanner {
         path: file.path,
         basename: file.basename,
         size: file.stat.size,
+        bodyLength: body.length,
         ctime: file.stat.ctime,
         mtime: file.stat.mtime,
         frontmatter,
@@ -124,6 +126,15 @@ export class Scanner {
 
   /**
    * Build the index and run every rule against it.
+   *
+   * On completion, fires a workspace event so other modules (status bar, UI,
+   * future subscribers) can react without a direct reference to the Scanner:
+   *
+   *   Event name : `vault-doctor:scan-complete`
+   *   Payload    : `ScanResult` (the same value this method returns)
+   *
+   * Subscribe with:
+   *   `app.workspace.on("vault-doctor:scan-complete", (result: ScanResult) => { ... })`
    */
   async scan(): Promise<ScanResult> {
     const start = Date.now();
@@ -138,7 +149,7 @@ export class Scanner {
     const score = computeScore(issues, ALL_RULES);
     const durationMs = Date.now() - start;
 
-    return {
+    const result: ScanResult = {
       scannedAt: Date.now(),
       noteCount: vault.notes.size,
       attachmentCount: vault.attachments.size,
@@ -146,6 +157,10 @@ export class Scanner {
       score,
       durationMs,
     };
+
+    this.plugin.app.workspace.trigger("vault-doctor:scan-complete", result);
+
+    return result;
   }
 
   // ---- helpers -------------------------------------------------------------
@@ -173,4 +188,31 @@ export class Scanner {
     return out;
   }
 
+}
+
+/**
+ * Strip a leading YAML frontmatter block from `content` and return the body.
+ *
+ * Conservative detection: the file must begin with a line that is exactly
+ * `---` (trailing whitespace allowed), followed by a newline. We then look for
+ * the next line that is exactly `---` (again, optional trailing whitespace),
+ * either followed by a newline or sitting at end-of-file. If either delimiter
+ * is missing the entire `content` is treated as body.
+ */
+function stripFrontmatter(content: string): string {
+  // Opening delimiter: `---` on the very first line, optional trailing
+  // whitespace, terminated by `\n`.
+  const openMatch = /^---[ \t]*\n/.exec(content);
+  if (openMatch === null) return content;
+
+  const afterOpen = openMatch[0].length;
+
+  // Closing delimiter: a line that is exactly `---` (optional trailing
+  // whitespace) — either followed by a newline or anchored at end-of-string.
+  const closeRe = /\n---[ \t]*(?:\n|$)/g;
+  closeRe.lastIndex = afterOpen;
+  const closeMatch = closeRe.exec(content);
+  if (closeMatch === null) return content;
+
+  return content.slice(closeMatch.index + closeMatch[0].length);
 }

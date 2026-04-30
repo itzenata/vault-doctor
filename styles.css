@@ -426,3 +426,18 @@
   color: var(--vd-text-muted, #888);
   font-style: italic;
 }
+
+/* Status bar widget */
+.vd-statusbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.vd-statusbar:hover {
+  opacity: 0.85;
+}
+.vd-statusbar-icon { font-size: 13px; }
+.vd-statusbar-score { font-weight: 600; }
+.vd-statusbar-denom { color: var(--vd-text-faint, var(--text-faint)); font-size: 11px; }

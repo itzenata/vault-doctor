@@ -32,6 +32,8 @@ export interface NoteMeta {
   path: string;
   basename: string;
   size: number;
+  /** Length in characters of the note body, excluding YAML frontmatter. */
+  bodyLength: number;
   ctime: number;
   mtime: number;
   frontmatter?: Record<string, unknown>;

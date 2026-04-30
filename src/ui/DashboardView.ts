@@ -1,7 +1,19 @@
 import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 import type { Issue, Rule, ScanResult, Severity } from "../types";
 import type { VaultDoctorPluginWithEngine } from "../engine";
+import type {
+  ActionResult,
+  VaultDoctorPluginWithActions,
+} from "../actions";
 import { ALL_RULES } from "../rules";
+
+/**
+ * The dashboard talks to both the engine (for scans) and the actions module
+ * (for fix/archive/delete/whitelist/open). Intersection type keeps the cast
+ * site honest as we read both shapes off the same plugin instance.
+ */
+type DashboardPlugin = VaultDoctorPluginWithEngine &
+  VaultDoctorPluginWithActions;
 
 // ---------------------------------------------------------------------------
 // View
@@ -38,12 +50,14 @@ const NOT_IMPL = "Action not yet implemented";
 export class DashboardView extends ItemView {
   static readonly VIEW_TYPE = "vault-doctor-dashboard";
 
-  private readonly plugin: VaultDoctorPluginWithEngine;
+  private readonly plugin: DashboardPlugin;
   private currentResult: ScanResult | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: VaultDoctorPluginWithEngine) {
     super(leaf);
-    this.plugin = plugin;
+    // The actions module is registered alongside the engine; we narrow once
+    // here so the rest of the view never has to repeat the cast.
+    this.plugin = plugin as DashboardPlugin;
   }
 
   getViewType(): string {
@@ -341,7 +355,10 @@ export class DashboardView extends ItemView {
         itemEl.createSpan({ cls: "vd-detail-path", text: issue.notePath });
         itemEl.createSpan({ cls: "vd-detail-open", text: "›" });
         itemEl.addEventListener("click", () => {
-          new Notice(NOT_IMPL);
+          // Open the source note (not the [[target]]) — the user wants to
+          // jump to the file that contains the broken link, not the missing
+          // destination.
+          void this.runAction("open", issue, { silent: true, rescan: false });
         });
       }
     }
@@ -353,15 +370,27 @@ export class DashboardView extends ItemView {
     primary.appendText(" ");
     primary.createSpan({ cls: "vd-kbd-mini", text: "⌘↵" });
     primary.addEventListener("click", () => {
-      new Notice(NOT_IMPL);
+      // "fix" is intentionally unimplemented in v1: route the click into
+      // the dispatcher anyway so the day we ship a fixer the wiring is
+      // already correct, and surface a friendly Notice in the meantime.
+      void this.runAction("fix", issues, { rescan: false });
     });
 
-    for (const secondary of ["Show all", "Whitelist"]) {
-      const btn = actions.createEl("button", { cls: "vd-btn", text: secondary });
-      btn.addEventListener("click", () => {
-        new Notice(NOT_IMPL);
-      });
-    }
+    const showAllBtn = actions.createEl("button", {
+      cls: "vd-btn",
+      text: "Show all",
+    });
+    showAllBtn.addEventListener("click", () => {
+      new Notice("Show all view not yet implemented");
+    });
+
+    const whitelistBtn = actions.createEl("button", {
+      cls: "vd-btn",
+      text: "Whitelist",
+    });
+    whitelistBtn.addEventListener("click", () => {
+      void this.runAction("whitelist", issues, { rescan: true });
+    });
   }
 
   private renderFooter(parent: HTMLElement, result: ScanResult | null): void {
@@ -400,6 +429,87 @@ export class DashboardView extends ItemView {
     cta.addEventListener("click", () => {
       new Notice("Guided cleanup not yet implemented");
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // Action plumbing
+  // -------------------------------------------------------------------------
+
+  /**
+   * Single funnel for every dashboard click that routes to the action
+   * dispatcher. Centralising this keeps the per-button handlers tiny and
+   * guarantees consistent UX (Notice text, optional rescan, error fallback).
+   *
+   * @param actionId The action to execute.
+   * @param scope Single issue or batch.
+   * @param opts.rescan When true, re-runs the scan after a successful action
+   *   so the dashboard reflects the new state.
+   * @param opts.silent When true, suppresses the success Notice (used for
+   *   navigation actions like `open`).
+   */
+  private async runAction(
+    actionId: import("../types").ActionId,
+    scope: Issue | Issue[],
+    opts: { rescan?: boolean; silent?: boolean } = {},
+  ): Promise<void> {
+    try {
+      const result = await this.plugin.actions.execute(actionId, scope);
+      this.surfaceResult(actionId, result, opts.silent === true);
+      if (opts.rescan === true && result.applied > 0) {
+        void this.runScan();
+      }
+    } catch (err) {
+      if (actionId === "fix") {
+        new Notice(
+          "Fix action coming soon — use Open or Whitelist for now",
+        );
+        return;
+      }
+      new Notice(`Action failed: ${String(err)}`);
+    }
+  }
+
+  /**
+   * Translate an `ActionResult` into a user-visible Notice.
+   *
+   * - All applied → success.
+   * - All skipped (likely cancelled confirmation) → silent.
+   * - Mixed errors → partial-failure message with the count of failures.
+   */
+  private surfaceResult(
+    actionId: import("../types").ActionId,
+    result: ActionResult,
+    silent: boolean,
+  ): void {
+    const total = result.applied + result.errors.length + result.skipped;
+    if (total === 0) return;
+
+    if (result.applied === 0 && result.errors.length === 0) {
+      // User cancelled or nothing to do — no Notice needed.
+      return;
+    }
+
+    if (silent && result.errors.length === 0) return;
+
+    const verb = pastTenseFor(actionId);
+
+    if (result.errors.length === 0) {
+      new Notice(`${verb} ${result.applied} ${noun(result.applied)}`);
+      return;
+    }
+
+    if (result.applied === 0) {
+      new Notice(
+        `${capitalize(actionId)} failed for all ${result.errors.length} ${noun(result.errors.length)}`,
+      );
+      console.error("[Vault Doctor] action errors", result.errors);
+      return;
+    }
+
+    new Notice(
+      `${verb} ${result.applied} ${noun(result.applied)}, ${result.errors.length} failed`,
+    );
+    console.error("[Vault Doctor] partial action errors", result.errors);
   }
 
   // -------------------------------------------------------------------------
@@ -442,6 +552,30 @@ function countBySeverity(issues: Issue[]): Record<Severity, number> {
   const counts: Record<Severity, number> = { critical: 0, warning: 0, info: 0 };
   for (const issue of issues) counts[issue.severity] += 1;
   return counts;
+}
+
+function pastTenseFor(actionId: import("../types").ActionId): string {
+  switch (actionId) {
+    case "archive":
+      return "Archived";
+    case "delete":
+      return "Trashed";
+    case "whitelist":
+      return "Whitelisted";
+    case "open":
+      return "Opened";
+    case "fix":
+      return "Fixed";
+  }
+}
+
+function noun(count: number): string {
+  return count === 1 ? "issue" : "issues";
+}
+
+function capitalize(value: string): string {
+  if (value.length === 0) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function formatRelativeTime(ms: number): string {
