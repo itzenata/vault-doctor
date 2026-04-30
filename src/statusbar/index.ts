@@ -25,10 +25,13 @@ export async function registerStatusBar(plugin: Plugin): Promise<void> {
   // Empty state until the first scan completes.
   item.update(null);
 
-  // Workspace.on's overloads only cover built-in event names, so we narrow
-  // through ScanCompleteOn — one cast at the boundary, payload stays typed.
-  const on = plugin.app.workspace.on as unknown as ScanCompleteOn;
-  const eventRef = on(SCAN_COMPLETE_EVENT, (result) => {
+  // Workspace.on's overloads only cover built-in event names, so we cast the
+  // workspace (NOT the extracted method) and call .on as a method — this
+  // preserves the `this` binding Obsidian needs internally.
+  type WorkspaceWithCustomOn = { on: ScanCompleteOn };
+  const eventRef = (
+    plugin.app.workspace as unknown as WorkspaceWithCustomOn
+  ).on(SCAN_COMPLETE_EVENT, (result) => {
     item.update(result);
   });
   plugin.registerEvent(eventRef);
