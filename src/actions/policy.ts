@@ -18,7 +18,11 @@ const BULK_THRESHOLD = 5;
  *             system file manager)
  * - whitelist → never (purely additive frontmatter)
  * - open      → never (read-only)
- * - fix       → not yet supported; dispatcher rejects before reaching here
+ * - fix       → only for batches (scopeSize > 1). The user is about to walk
+ *               through N picker modals; a top-level "you'll be asked to pick
+ *               replacements for N issues, continue?" prompt prevents
+ *               accidental clicks. Single-issue fix opens the picker
+ *               directly — that's already a per-issue decision.
  */
 export function requiresConfirmation(
   actionId: ActionId,
@@ -33,7 +37,7 @@ export function requiresConfirmation(
     case "open":
       return false;
     case "fix":
-      return false;
+      return scopeSize > 1;
   }
 }
 

@@ -9,7 +9,7 @@
 // Scanner.scan() runs every rule in ALL_RULES against the resulting index
 // and aggregates a ScanResult, including a 0-100 hygiene score.
 
-import type { Plugin } from "obsidian";
+import type { Plugin, TFile } from "obsidian";
 import type {
   AttachmentMeta,
   Issue,
@@ -21,6 +21,14 @@ import type {
 import { parseLinks } from "./linkParser";
 import { computeScore } from "./scoring";
 import { ALL_RULES } from "../rules";
+import type { VaultDoctorSettings } from "../settings/types";
+
+interface ExclusionConfig {
+  folders: string[]; // already normalized: lowercased, no leading/trailing slash
+  tags: string[]; // already normalized: lowercased, no leading "#"
+}
+
+const EMPTY_EXCLUSIONS: ExclusionConfig = { folders: [], tags: [] };
 
 export class Scanner {
   private readonly plugin: Plugin;
@@ -31,8 +39,16 @@ export class Scanner {
 
   /**
    * Walk the vault and build a fully resolved index.
+   *
+   * `exclusions` controls which notes and attachments are pruned from the
+   * resulting index. Excluded notes never appear in `notes`, never appear as
+   * outbound-link sources, and (because their outbound edges are dropped) do
+   * not contribute inbound entries to the surviving notes. Excluded folders
+   * also remove matching attachments.
    */
-  async buildIndex(): Promise<VaultIndex> {
+  async buildIndex(
+    exclusions: ExclusionConfig = EMPTY_EXCLUSIONS,
+  ): Promise<VaultIndex> {
     const app = this.plugin.app;
     const notes = new Map<string, NoteMeta>();
     const attachments = new Map<string, AttachmentMeta>();
@@ -44,6 +60,11 @@ export class Scanner {
     const mdFiles = app.vault.getMarkdownFiles();
 
     for (const file of mdFiles) {
+      const cache = app.metadataCache.getFileCache(file);
+      const noteTags = cache?.tags?.map((t) => t.tag) ?? [];
+
+      if (this.shouldSkipNote(file, noteTags, exclusions)) continue;
+
       const content = await app.vault.cachedRead(file);
       const body = stripFrontmatter(content);
       const rawLinks = parseLinks(file.path, content);
@@ -57,12 +78,10 @@ export class Scanner {
         return dest === null ? link : { ...link, resolved: true };
       });
 
-      const cache = app.metadataCache.getFileCache(file);
       const frontmatter =
         cache?.frontmatter !== undefined
           ? this.cloneFrontmatter(cache.frontmatter)
           : undefined;
-      const noteTags = cache?.tags?.map((t) => t.tag) ?? [];
 
       const meta: NoteMeta = {
         path: file.path,
@@ -90,6 +109,8 @@ export class Scanner {
     // ---- Pass 2 — inbound link map -----------------------------------------
     // For every resolved outbound link, record the reverse edge keyed by the
     // resolved destination path (we re-resolve here to obtain the path).
+    // Excluded notes never made it into `notes`, so their outbound edges are
+    // already absent — no need to re-check sources here.
     for (const note of notes.values()) {
       for (const link of note.outboundLinks) {
         if (!link.resolved) continue;
@@ -112,6 +133,7 @@ export class Scanner {
     const allFiles = app.vault.getFiles();
     for (const file of allFiles) {
       if (file.extension === "md") continue;
+      if (this.matchesExcludedFolder(file.path, exclusions.folders)) continue;
       const refs = inbound.get(file.path) ?? [];
       const att: AttachmentMeta = {
         path: file.path,
@@ -138,15 +160,43 @@ export class Scanner {
    */
   async scan(): Promise<ScanResult> {
     const start = Date.now();
-    const vault = await this.buildIndex();
+
+    // Resolve settings at scan start. The settings module attaches a
+    // `settings` field to the plugin instance — but registration order is not
+    // guaranteed (engine may be wired before settings, and tests may skip it
+    // entirely). When absent, fall back to "everything enabled, no
+    // exclusions" — matching the pre-settings behaviour.
+    const pluginWithSettings = this.plugin as Plugin &
+      Partial<{ settings: { values: VaultDoctorSettings } }>;
+    const settings = pluginWithSettings.settings?.values;
+
+    const exclusions: ExclusionConfig =
+      settings === undefined
+        ? EMPTY_EXCLUSIONS
+        : {
+            folders: normalizeFolderEntries(settings.excludedFolders),
+            tags: normalizeTagEntries(settings.excludedTags),
+          };
+
+    // A rule id missing from the persisted map (e.g. a rule shipped after the
+    // user last opened the settings tab) defaults to enabled — hence `!==
+    // false` rather than `=== true`.
+    const activeRules =
+      settings !== undefined
+        ? ALL_RULES.filter((r) => settings.enabledRules[r.id] !== false)
+        : ALL_RULES;
+
+    const vault = await this.buildIndex(exclusions);
 
     const issues: Issue[] = [];
-    for (const rule of ALL_RULES) {
+    for (const rule of activeRules) {
       const ruleIssues = rule.evaluate({ vault, rule });
       for (const issue of ruleIssues) issues.push(issue);
     }
 
-    const score = computeScore(issues, ALL_RULES);
+    // Score against `activeRules` so disabled rules don't inflate the
+    // penalty potential — with all rules off, score stays at 100.
+    const score = computeScore(issues, activeRules);
     const durationMs = Date.now() - start;
 
     const result: ScanResult = {
@@ -164,6 +214,51 @@ export class Scanner {
   }
 
   // ---- helpers -------------------------------------------------------------
+
+  /**
+   * True when `file` should be omitted from the index because of folder or
+   * tag exclusions. Folder match is case-insensitive against the file path;
+   * tag match is case-insensitive and tolerant of leading `#`.
+   */
+  private shouldSkipNote(
+    file: TFile,
+    noteTags: string[],
+    exclusions: ExclusionConfig,
+  ): boolean {
+    if (this.matchesExcludedFolder(file.path, exclusions.folders)) return true;
+    if (exclusions.tags.length === 0) return false;
+
+    for (const raw of noteTags) {
+      const normalized = raw.replace(/^#+/, "").toLowerCase();
+      if (exclusions.tags.includes(normalized)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Folder match rule: case-insensitive substring match on the file path,
+   * with the entry's leading and trailing slashes stripped before comparison.
+   * A path matches an entry `foo` when it (a) starts with `foo/` or (b)
+   * contains `/foo/`. This catches both top-level (`foo/bar.md`) and nested
+   * (`a/foo/bar.md`) placement without false-matching prefixes (`foobar/...`).
+   */
+  private matchesExcludedFolder(
+    filePath: string,
+    folders: string[],
+  ): boolean {
+    if (folders.length === 0) return false;
+    const lowerPath = filePath.toLowerCase();
+    for (const folder of folders) {
+      if (folder.length === 0) continue;
+      if (
+        lowerPath.startsWith(`${folder}/`) ||
+        lowerPath.includes(`/${folder}/`)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   private pushInbound(
     map: Map<string, LinkMeta[]>,
@@ -188,6 +283,33 @@ export class Scanner {
     return out;
   }
 
+}
+
+/**
+ * Normalize folder entries: lowercase, drop leading/trailing slashes and
+ * whitespace. Empty entries are dropped so they can't match every path.
+ */
+function normalizeFolderEntries(entries: string[]): string[] {
+  const out: string[] = [];
+  for (const entry of entries) {
+    const trimmed = entry.trim().replace(/^\/+|\/+$/g, "").toLowerCase();
+    if (trimmed.length > 0) out.push(trimmed);
+  }
+  return out;
+}
+
+/**
+ * Normalize tag entries: lowercase, strip a leading `#`, drop empty entries.
+ * Tags in `metadataCache` arrive prefixed with `#`; this lets the user write
+ * `wip` or `#wip` interchangeably in settings.
+ */
+function normalizeTagEntries(entries: string[]): string[] {
+  const out: string[] = [];
+  for (const entry of entries) {
+    const trimmed = entry.trim().replace(/^#+/, "").toLowerCase();
+    if (trimmed.length > 0) out.push(trimmed);
+  }
+  return out;
 }
 
 /**

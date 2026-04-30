@@ -7,6 +7,9 @@ import { BROKEN_EMBED_RULE } from "./brokenEmbed";
 import { ORPHAN_NOTE_RULE } from "./orphanNote";
 import { EMPTY_NOTE_RULE } from "./emptyNote";
 import { ORPHAN_ATTACHMENT_RULE } from "./orphanAttachment";
+import { OVERSIZED_NOTE_RULE } from "./oversizedNote";
+import { STALE_NOTE_RULE } from "./staleNote";
+import { DAILY_GAP_RULE } from "./dailyGap";
 
 export const ALL_RULES: Rule[] = [
   BROKEN_LINK_RULE,
@@ -14,6 +17,9 @@ export const ALL_RULES: Rule[] = [
   ORPHAN_NOTE_RULE,
   EMPTY_NOTE_RULE,
   ORPHAN_ATTACHMENT_RULE,
+  OVERSIZED_NOTE_RULE,
+  STALE_NOTE_RULE,
+  DAILY_GAP_RULE,
 ];
 
 export {
@@ -22,4 +28,7 @@ export {
   ORPHAN_NOTE_RULE,
   EMPTY_NOTE_RULE,
   ORPHAN_ATTACHMENT_RULE,
+  OVERSIZED_NOTE_RULE,
+  STALE_NOTE_RULE,
+  DAILY_GAP_RULE,
 };

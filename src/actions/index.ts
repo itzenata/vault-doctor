@@ -24,6 +24,8 @@ export { executeAction } from "./dispatcher";
 export type { ActionResult } from "./dispatcher";
 export { requiresConfirmation } from "./policy";
 export { confirmAction } from "./confirmation";
+export { fixBrokenLink } from "./fixBrokenLink";
+export type { FixOutcome } from "./fixBrokenLink";
 
 /**
  * Plugin instances augmented with the action dispatcher. We keep the surface
