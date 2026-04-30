@@ -1,0 +1,26 @@
+/* Vault Doctor — design tokens.
+   These match mockup.html (Linear-dense + dark theme). */
+
+.vault-doctor-pane {
+  --vd-bg: #0a0a0a;
+  --vd-bg-elev: #0d0d0d;
+  --vd-bg-row: #131313;
+  --vd-bg-input: #1a1a1a;
+  --vd-border: #1f1f1f;
+  --vd-border-strong: #2a2a2a;
+  --vd-text: #e6e6e6;
+  --vd-text-muted: #888;
+  --vd-text-faint: #555;
+  --vd-accent: #5e6ad2;
+  --vd-accent-hover: #7480e0;
+  --vd-critical: #ff5e5e;
+  --vd-warning: #ffc14a;
+  --vd-info: #4a9eff;
+  --vd-good: #6acc86;
+  --vd-orange: #ff8a4c;
+
+  background: var(--vd-bg);
+  color: var(--vd-text);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}

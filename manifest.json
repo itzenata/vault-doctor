@@ -1,0 +1,11 @@
+{
+  "id": "vault-doctor",
+  "name": "Vault Doctor",
+  "version": "0.0.1",
+  "minAppVersion": "1.5.0",
+  "description": "Audit and auto-cleanup for your Obsidian vault. Health score, broken-link detection, orphan notes, duplicates, ghost attachments. Local-first, dry-run by default.",
+  "author": "Itzenata",
+  "authorUrl": "https://github.com/itzenata",
+  "isDesktopOnly": false,
+  "fundingUrl": "https://github.com/sponsors/itzenata"
+}

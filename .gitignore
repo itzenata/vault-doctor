@@ -146,3 +146,8 @@ vite.config.ts.timestamp-*
 PRD.md
 CLAUDE.md
 
+# Obsidian plugin build output
+main.js
+main.js.map
+data.json
+
