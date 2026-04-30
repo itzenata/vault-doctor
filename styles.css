@@ -23,4 +23,398 @@
   color: var(--vd-text);
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
+
+  /* Reset Obsidian content padding so the dense layout reaches the edges. */
+  padding: 0;
+}
+
+/* Ensure children inherit box-sizing predictably. */
+.vault-doctor-pane,
+.vault-doctor-pane * {
+  box-sizing: border-box;
+}
+
+/* ---------------------------------------------------------------------------
+   Pane header
+--------------------------------------------------------------------------- */
+.vault-doctor-pane .vd-pane-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--vd-border);
+  background: var(--vd-bg-elev);
+}
+.vault-doctor-pane .vd-pane-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--vd-text);
+}
+.vault-doctor-pane .vd-pane-title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--vd-text);
+}
+.vault-doctor-pane .vd-pane-title-icon svg {
+  width: 16px;
+  height: 16px;
+}
+.vault-doctor-pane .vd-spacer { flex: 1; }
+.vault-doctor-pane .vd-meta {
+  color: var(--vd-text-muted);
+  font-size: 12px;
+}
+.vault-doctor-pane .vd-kbd {
+  background: var(--vd-bg-input);
+  border: 1px solid var(--vd-border-strong);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  color: var(--vd-text-muted);
+  cursor: pointer;
+}
+.vault-doctor-pane .vd-kbd:hover {
+  color: var(--vd-text);
+  border-color: var(--vd-text-faint);
+}
+.vault-doctor-pane .vd-icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--vd-text-muted);
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none;
+}
+.vault-doctor-pane .vd-icon-btn svg {
+  width: 14px;
+  height: 14px;
+}
+.vault-doctor-pane .vd-icon-btn:hover {
+  background: var(--vd-bg-row);
+  color: var(--vd-text);
+}
+
+/* ---------------------------------------------------------------------------
+   Summary
+--------------------------------------------------------------------------- */
+.vault-doctor-pane .vd-summary {
+  display: grid;
+  grid-template-columns: 132px 1fr auto;
+  gap: 24px;
+  padding: 24px 18px 22px;
+  align-items: center;
+  border-bottom: 1px solid var(--vd-border);
+}
+.vault-doctor-pane .vd-gauge {
+  position: relative;
+  width: 132px;
+  height: 132px;
+}
+.vault-doctor-pane .vd-gauge svg {
+  transform: rotate(-90deg);
+}
+.vault-doctor-pane .vd-ring-bg { stroke: var(--vd-border-strong); }
+.vault-doctor-pane .vd-ring-fg { stroke: var(--vd-orange); }
+.vault-doctor-pane .vd-score-num {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.vault-doctor-pane .vd-score-num-num {
+  font-size: 40px;
+  font-weight: 700;
+  color: var(--vd-orange);
+  line-height: 1;
+  letter-spacing: -1px;
+  font-variant-numeric: tabular-nums;
+}
+.vault-doctor-pane .vd-score-num-denom {
+  font-size: 11px;
+  color: var(--vd-text-faint);
+  margin-top: 4px;
+}
+.vault-doctor-pane .vd-verdict {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--vd-orange);
+}
+.vault-doctor-pane .vd-verdict-sub {
+  font-size: 12px;
+  color: var(--vd-text-muted);
+  margin-top: 3px;
+}
+.vault-doctor-pane .vd-verdict-delta {
+  color: var(--vd-critical);
+  font-weight: 500;
+}
+.vault-doctor-pane .vd-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+}
+.vault-doctor-pane .vd-tag {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 12px;
+  border: 1px solid;
+  font-variant-numeric: tabular-nums;
+  background: var(--vd-bg-elev);
+}
+.vault-doctor-pane .vd-tag.critical {
+  color: var(--vd-critical);
+  border-color: rgba(255, 94, 94, 0.3);
+}
+.vault-doctor-pane .vd-tag.warning {
+  color: var(--vd-warning);
+  border-color: rgba(255, 193, 74, 0.3);
+}
+.vault-doctor-pane .vd-tag.info {
+  color: var(--vd-info);
+  border-color: rgba(74, 158, 255, 0.3);
+}
+
+/* ---------------------------------------------------------------------------
+   Section label
+--------------------------------------------------------------------------- */
+.vault-doctor-pane .vd-section-label {
+  padding: 12px 18px 6px;
+  font-size: 11px;
+  color: var(--vd-text-faint);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  font-weight: 500;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.vault-doctor-pane .vd-section-label-right {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--vd-text-muted);
+}
+.vault-doctor-pane .vd-section-label a {
+  color: var(--vd-accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+.vault-doctor-pane .vd-section-label a:hover {
+  color: var(--vd-accent-hover);
+}
+
+/* ---------------------------------------------------------------------------
+   Issue rows
+--------------------------------------------------------------------------- */
+.vault-doctor-pane .vd-table {
+  border-top: 1px solid var(--vd-border);
+}
+.vault-doctor-pane .vd-row {
+  display: grid;
+  grid-template-columns: 18px 1fr 64px 88px 16px;
+  gap: 12px;
+  padding: 9px 18px;
+  align-items: center;
+  border-bottom: 1px solid var(--vd-border);
+  cursor: pointer;
+}
+.vault-doctor-pane .vd-row:hover { background: var(--vd-bg-row); }
+.vault-doctor-pane .vd-row.expanded {
+  background: var(--vd-bg-row);
+  border-bottom-color: transparent;
+}
+.vault-doctor-pane .vd-row .vd-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  justify-self: center;
+}
+.vault-doctor-pane .vd-row.critical .vd-dot {
+  background: var(--vd-critical);
+  box-shadow: 0 0 0 3px rgba(255, 94, 94, 0.1);
+}
+.vault-doctor-pane .vd-row.warning .vd-dot {
+  background: var(--vd-warning);
+  box-shadow: 0 0 0 3px rgba(255, 193, 74, 0.1);
+}
+.vault-doctor-pane .vd-row.info .vd-dot {
+  background: var(--vd-info);
+  box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.1);
+}
+.vault-doctor-pane .vd-row-name {
+  color: var(--vd-text);
+  font-size: 13px;
+  font-weight: 400;
+}
+.vault-doctor-pane .vd-row-name-meta {
+  color: var(--vd-text-faint);
+  font-size: 11px;
+}
+.vault-doctor-pane .vd-row-count {
+  color: var(--vd-text-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+.vault-doctor-pane .vd-row-sev {
+  color: var(--vd-text-faint);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  text-align: right;
+}
+.vault-doctor-pane .vd-row-arrow {
+  color: var(--vd-text-faint);
+  font-size: 12px;
+  transition: transform 0.15s;
+}
+.vault-doctor-pane .vd-row.expanded .vd-row-arrow {
+  transform: rotate(90deg);
+  color: var(--vd-text);
+}
+
+/* ---------------------------------------------------------------------------
+   Expanded detail under a row
+--------------------------------------------------------------------------- */
+.vault-doctor-pane .vd-detail {
+  border-bottom: 1px solid var(--vd-border);
+  background: var(--vd-bg-row);
+  padding: 6px 18px 14px 48px;
+}
+.vault-doctor-pane .vd-detail-item {
+  display: grid;
+  grid-template-columns: 1fr auto 16px;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  align-items: center;
+  cursor: pointer;
+}
+.vault-doctor-pane .vd-detail-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.vault-doctor-pane .vd-detail-link {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  color: var(--vd-critical);
+}
+.vault-doctor-pane .vd-detail-path {
+  color: var(--vd-text-muted);
+  font-size: 11px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+.vault-doctor-pane .vd-detail-open {
+  color: var(--vd-text-faint);
+  font-size: 12px;
+}
+.vault-doctor-pane .vd-detail-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 0 10px;
+}
+
+/* ---------------------------------------------------------------------------
+   Buttons
+--------------------------------------------------------------------------- */
+.vault-doctor-pane .vd-btn {
+  background: var(--vd-bg-input);
+  border: 1px solid var(--vd-border-strong);
+  color: var(--vd-text);
+  padding: 4px 11px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+  box-shadow: none;
+}
+.vault-doctor-pane .vd-btn:hover {
+  background: #222;
+  border-color: #333;
+}
+.vault-doctor-pane .vd-btn.primary {
+  background: var(--vd-accent);
+  border-color: var(--vd-accent);
+  color: #fff;
+}
+.vault-doctor-pane .vd-btn.primary:hover {
+  background: var(--vd-accent-hover);
+  border-color: var(--vd-accent-hover);
+}
+.vault-doctor-pane .vd-btn .vd-kbd-mini {
+  font-family: ui-monospace, monospace;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 10px;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  padding-left: 6px;
+  margin-left: 2px;
+}
+.vault-doctor-pane .vd-btn:not(.primary) .vd-kbd-mini {
+  color: var(--vd-text-faint);
+  border-left-color: var(--vd-border-strong);
+}
+
+/* ---------------------------------------------------------------------------
+   Footer
+--------------------------------------------------------------------------- */
+.vault-doctor-pane .vd-footer {
+  border-top: 1px solid var(--vd-border);
+  background: var(--vd-bg-elev);
+  padding: 11px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.vault-doctor-pane .vd-footer-label {
+  font-size: 12px;
+  color: var(--vd-text-muted);
+}
+.vault-doctor-pane .vd-footer-gain {
+  color: var(--vd-good);
+  font-weight: 600;
+  margin-left: 2px;
+}
+.vault-doctor-pane .vd-footer-cta {
+  background: var(--vd-accent);
+  color: #fff;
+  border: 1px solid var(--vd-accent);
+  padding: 6px 12px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: none;
+}
+.vault-doctor-pane .vd-footer-cta:hover {
+  background: var(--vd-accent-hover);
+  border-color: var(--vd-accent-hover);
+}
+.vault-doctor-pane .vd-footer-cta .vd-kbd-mini {
+  font-family: ui-monospace, monospace;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 10px;
+  border-left: 1px solid rgba(255, 255, 255, 0.25);
+  padding-left: 7px;
 }
