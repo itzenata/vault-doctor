@@ -1,4 +1,5 @@
 import type { Plugin, WorkspaceLeaf } from "obsidian";
+import type { VaultDoctorPluginWithEngine } from "../engine";
 import { DashboardView } from "./DashboardView";
 
 // Public contract used by main.ts:
@@ -6,7 +7,8 @@ import { DashboardView } from "./DashboardView";
 export async function registerUI(plugin: Plugin): Promise<void> {
   plugin.registerView(
     DashboardView.VIEW_TYPE,
-    (leaf: WorkspaceLeaf) => new DashboardView(leaf),
+    (leaf: WorkspaceLeaf) =>
+      new DashboardView(leaf, plugin as VaultDoctorPluginWithEngine),
   );
 
   plugin.addRibbonIcon("stethoscope", "Open Vault Doctor", () => {

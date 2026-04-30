@@ -418,3 +418,11 @@
   border-left: 1px solid rgba(255, 255, 255, 0.25);
   padding-left: 7px;
 }
+
+/* Empty state for an expanded rule with no example issues. */
+.vault-doctor-pane .vd-detail-empty {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--vd-text-muted, #888);
+  font-style: italic;
+}
