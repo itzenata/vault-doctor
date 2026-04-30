@@ -145,7 +145,4 @@ vite.config.ts.timestamp-*
 # Internal-only files (never publish)
 PRD.md
 CLAUDE.md
-README.draft.md
-REDDIT_POST.draft.md
-landing-preview.png
 
