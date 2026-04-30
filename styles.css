@@ -443,78 +443,120 @@
 .vd-statusbar-denom { color: var(--vd-text-faint, var(--text-faint)); font-size: 11px; }
 
 /* ---------------------------------------------------------------------------
-   "Show all" modal
-   Scoped under .vault-doctor-show-all so the dense Linear aesthetic doesn't
-   leak into other Obsidian modals. Reuses --vd-* tokens declared on the
-   pane, so we redeclare them locally (modals render outside .vault-doctor-pane).
+   Sub-view shell
+   The pane itself is a flex column; sub-views fill its full height with a
+   sticky breadcrumb on top, a scrollable body in the middle, and (for
+   ShowAll) a sticky action bar at the bottom. CSS tokens are inherited
+   from .vault-doctor-pane — no redeclaration needed.
 --------------------------------------------------------------------------- */
-.vault-doctor-show-all {
-  --vd-bg: #0a0a0a;
-  --vd-bg-elev: #0d0d0d;
-  --vd-bg-row: #131313;
-  --vd-bg-input: #1a1a1a;
-  --vd-border: #1f1f1f;
-  --vd-border-strong: #2a2a2a;
-  --vd-text: #e6e6e6;
-  --vd-text-muted: #888;
-  --vd-text-faint: #555;
-  --vd-accent: #5e6ad2;
-  --vd-accent-hover: #7480e0;
-  --vd-critical: #ff5e5e;
-  --vd-warning: #ffc14a;
-  --vd-info: #4a9eff;
-  --vd-good: #6acc86;
-
-  color: var(--vd-text);
-  font-size: 13px;
-  -webkit-font-smoothing: antialiased;
+.vault-doctor-pane.is-show-all,
+.vault-doctor-pane.is-cleanup {
   display: flex;
   flex-direction: column;
-  gap: 0;
-  padding: 0;
-  margin: -10px;
-}
-.vault-doctor-show-all,
-.vault-doctor-show-all * {
-  box-sizing: border-box;
+  height: 100%;
+  overflow: hidden;
 }
 
-/* Header */
-.vault-doctor-show-all .vd-sa-header {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  padding: 14px 18px 10px;
-  background: var(--vd-bg-elev);
+/* Breadcrumb top-nav (shared by ShowAll and Cleanup sub-views) */
+.vault-doctor-pane .vd-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--vd-border);
+  background: var(--vd-bg-elev);
+  flex: 0 0 auto;
 }
-.vault-doctor-show-all .vd-sa-title {
-  margin: 0 0 4px;
-  font-size: 15px;
-  font-weight: 600;
+.vault-doctor-pane .vd-bc-back {
+  padding: 2px 6px;
+}
+.vault-doctor-pane .vd-bc-back.is-disabled,
+.vault-doctor-pane .vd-bc-back:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.vault-doctor-pane .vd-bc-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+}
+.vault-doctor-pane .vd-bc-root {
+  color: var(--vd-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.vault-doctor-pane .vd-bc-root:hover {
   color: var(--vd-text);
 }
-.vault-doctor-show-all .vd-sa-subtitle {
+.vault-doctor-pane .vd-bc-sep {
+  color: var(--vd-text-faint);
+}
+.vault-doctor-pane .vd-bc-current {
+  color: var(--vd-text);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Sub-view body container — scrollable region between breadcrumb and any
+   sticky bottom bar. ShowAll has its own sticky action bar inside this
+   container (position: sticky against this scroll context). */
+.vault-doctor-pane .vd-subview-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------------------------------------------------------------------------
+   "Show all" sub-view
+   Was a floating modal (.vault-doctor-show-all); now renders inside the
+   pane under .vault-doctor-pane.is-show-all. Class names below stay
+   stable so the porting diff is minimal.
+--------------------------------------------------------------------------- */
+.vault-doctor-pane.is-show-all .vd-sa-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Header (subtitle only — the rule name lives in the breadcrumb). */
+.vault-doctor-pane.is-show-all .vd-sa-header {
+  padding: 12px 14px 8px;
+  background: var(--vd-bg-elev);
+  border-bottom: 1px solid var(--vd-border);
+  flex: 0 0 auto;
+}
+.vault-doctor-pane.is-show-all .vd-sa-subtitle {
   font-size: 12px;
   color: var(--vd-text-muted);
 }
-.vault-doctor-show-all .vd-sa-sev {
+.vault-doctor-pane.is-show-all .vd-sa-sev {
   text-transform: uppercase;
   letter-spacing: 0.6px;
   font-weight: 500;
   font-size: 11px;
 }
-.vault-doctor-show-all .vd-sa-sev-critical { color: var(--vd-critical); }
-.vault-doctor-show-all .vd-sa-sev-warning  { color: var(--vd-warning); }
-.vault-doctor-show-all .vd-sa-sev-info     { color: var(--vd-info); }
+.vault-doctor-pane.is-show-all .vd-sa-sev-critical { color: var(--vd-critical); }
+.vault-doctor-pane.is-show-all .vd-sa-sev-warning  { color: var(--vd-warning); }
+.vault-doctor-pane.is-show-all .vd-sa-sev-info     { color: var(--vd-info); }
 
 /* Search */
-.vault-doctor-show-all .vd-sa-search {
-  padding: 10px 18px;
+.vault-doctor-pane.is-show-all .vd-sa-search {
+  padding: 10px 14px;
   border-bottom: 1px solid var(--vd-border);
   background: var(--vd-bg);
+  flex: 0 0 auto;
 }
-.vault-doctor-show-all .vd-sa-search-input {
+.vault-doctor-pane.is-show-all .vd-sa-search-input {
   width: 100%;
   background: var(--vd-bg-input);
   border: 1px solid var(--vd-border-strong);
@@ -525,99 +567,78 @@
   font-family: inherit;
   outline: none;
 }
-.vault-doctor-show-all .vd-sa-search-input::placeholder {
+.vault-doctor-pane.is-show-all .vd-sa-search-input::placeholder {
   color: var(--vd-text-faint);
 }
-.vault-doctor-show-all .vd-sa-search-input:focus {
+.vault-doctor-pane.is-show-all .vd-sa-search-input:focus {
   border-color: var(--vd-accent);
 }
 
 /* Toolbar */
-.vault-doctor-show-all .vd-sa-toolbar {
+.vault-doctor-pane.is-show-all .vd-sa-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 18px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--vd-border);
   background: var(--vd-bg-elev);
+  flex: 0 0 auto;
 }
-.vault-doctor-show-all .vd-sa-toolbar-left,
-.vault-doctor-show-all .vd-sa-toolbar-right {
+.vault-doctor-pane.is-show-all .vd-sa-toolbar-left,
+.vault-doctor-pane.is-show-all .vd-sa-toolbar-right {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.vault-doctor-show-all .vd-sa-count {
+.vault-doctor-pane.is-show-all .vd-sa-count {
   font-size: 12px;
   color: var(--vd-text-muted);
   font-variant-numeric: tabular-nums;
 }
-
-/* Buttons (mirror .vd-btn so we don't depend on .vault-doctor-pane scope). */
-.vault-doctor-show-all .vd-btn {
-  background: var(--vd-bg-input);
-  border: 1px solid var(--vd-border-strong);
-  color: var(--vd-text);
-  padding: 4px 11px;
-  border-radius: 5px;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: inherit;
-  box-shadow: none;
-}
-.vault-doctor-show-all .vd-btn:hover:not(:disabled) {
-  background: #222;
-  border-color: #333;
-}
-.vault-doctor-show-all .vd-btn:disabled {
+.vault-doctor-pane.is-show-all .vd-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
-.vault-doctor-show-all .vd-btn.primary {
-  background: var(--vd-accent);
-  border-color: var(--vd-accent);
-  color: #fff;
-}
-.vault-doctor-show-all .vd-btn.primary:hover:not(:disabled) {
-  background: var(--vd-accent-hover);
-  border-color: var(--vd-accent-hover);
-}
 
-/* Table */
-.vault-doctor-show-all .vd-sa-table {
-  max-height: 50vh;
+/* Table — scrollable region. Rows stack vertically (path + ctx) for the
+   narrow sidebar pane. */
+.vault-doctor-pane.is-show-all .vd-sa-table {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   background: var(--vd-bg);
 }
-.vault-doctor-show-all .vd-sa-row {
+.vault-doctor-pane.is-show-all .vd-sa-row {
   display: grid;
-  grid-template-columns: 22px minmax(0, 2fr) minmax(0, 1.2fr) 56px;
-  gap: 12px;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  gap: 10px;
   align-items: center;
-  padding: 8px 18px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--vd-border);
   cursor: pointer;
 }
-.vault-doctor-show-all .vd-sa-row:hover {
+.vault-doctor-pane.is-show-all .vd-sa-row:hover {
   background: var(--vd-bg-row);
 }
-.vault-doctor-show-all .vd-sa-row.is-selected {
+.vault-doctor-pane.is-show-all .vd-sa-row.is-selected {
   background: rgba(94, 106, 210, 0.08);
 }
-.vault-doctor-show-all .vd-sa-row-check {
+.vault-doctor-pane.is-show-all .vd-sa-row-check {
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.vault-doctor-show-all .vd-sa-checkbox {
+.vault-doctor-pane.is-show-all .vd-sa-checkbox {
   cursor: pointer;
   margin: 0;
 }
-.vault-doctor-show-all .vd-sa-row-path {
+.vault-doctor-pane.is-show-all .vd-sa-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.vault-doctor-pane.is-show-all .vd-sa-row-path {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 12px;
   color: var(--vd-text);
@@ -626,7 +647,7 @@
   text-overflow: ellipsis;
   min-width: 0;
 }
-.vault-doctor-show-all .vd-sa-row-ctx {
+.vault-doctor-pane.is-show-all .vd-sa-row-ctx {
   font-size: 11px;
   color: var(--vd-text-muted);
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
@@ -635,7 +656,7 @@
   text-overflow: ellipsis;
   min-width: 0;
 }
-.vault-doctor-show-all .vd-sa-row-open {
+.vault-doctor-pane.is-show-all .vd-sa-row-open {
   justify-self: end;
   color: var(--vd-accent);
   font-size: 11px;
@@ -643,93 +664,74 @@
   padding: 2px 6px;
   border-radius: 3px;
 }
-.vault-doctor-show-all .vd-sa-row-open:hover {
+.vault-doctor-pane.is-show-all .vd-sa-row-open:hover {
   color: var(--vd-accent-hover);
   background: rgba(94, 106, 210, 0.12);
   text-decoration: none;
 }
 
 /* Empty state */
-.vault-doctor-show-all .vd-sa-empty {
-  padding: 32px 18px;
+.vault-doctor-pane.is-show-all .vd-sa-empty {
+  padding: 32px 14px;
   text-align: center;
   font-size: 12px;
   color: var(--vd-text-muted);
   font-style: italic;
 }
 
-/* Action bar */
-.vault-doctor-show-all .vd-sa-actions {
+/* Action bar — sticky at the bottom of the pane. */
+.vault-doctor-pane.is-show-all .vd-sa-actions {
   position: sticky;
   bottom: 0;
   z-index: 2;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 18px;
+  padding: 10px 14px;
   background: var(--vd-bg-elev);
   border-top: 1px solid var(--vd-border);
+  flex: 0 0 auto;
 }
-.vault-doctor-show-all .vd-sa-actions-spacer {
+.vault-doctor-pane.is-show-all .vd-sa-actions-spacer {
   flex: 1;
 }
 
 /* ---------------------------------------------------------------------------
-   Guided Cleanup wizard
-   Scoped under .vault-doctor-cleanup. Modals render outside
-   .vault-doctor-pane so we redeclare the design tokens locally.
+   Guided Cleanup sub-view
+   Was .vault-doctor-cleanup; now nested under .vault-doctor-pane.is-cleanup.
 --------------------------------------------------------------------------- */
-.vault-doctor-cleanup {
-  --vd-bg: #0a0a0a;
-  --vd-bg-elev: #0d0d0d;
-  --vd-bg-row: #131313;
-  --vd-bg-input: #1a1a1a;
-  --vd-border: #1f1f1f;
-  --vd-border-strong: #2a2a2a;
-  --vd-text: #e6e6e6;
-  --vd-text-muted: #888;
-  --vd-text-faint: #555;
-  --vd-accent: #5e6ad2;
-  --vd-accent-hover: #7480e0;
-  --vd-critical: #ff5e5e;
-  --vd-warning: #ffc14a;
-  --vd-info: #4a9eff;
-  --vd-good: #6acc86;
-
-  color: var(--vd-text);
-  font-size: 13px;
-  -webkit-font-smoothing: antialiased;
+.vault-doctor-pane.is-cleanup .vd-gc-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
-.vault-doctor-cleanup,
-.vault-doctor-cleanup * {
-  box-sizing: border-box;
+.vault-doctor-pane.is-cleanup .vd-gc-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
 }
-.vault-doctor-cleanup h2 {
-  margin: 0 0 4px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--vd-text);
-}
-.vault-doctor-cleanup .vd-gc-subtitle {
+.vault-doctor-pane.is-cleanup .vd-gc-subtitle {
   font-size: 12px;
   color: var(--vd-text-muted);
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
-.vault-doctor-cleanup .vd-gc-empty {
+.vault-doctor-pane.is-cleanup .vd-gc-empty {
   font-size: 13px;
   color: var(--vd-text-muted);
-  margin: 8px 0 16px;
+  margin: 14px;
 }
 
 /* Severity sections */
-.vault-doctor-cleanup .vd-gc-section {
+.vault-doctor-pane.is-cleanup .vd-gc-section {
   border: 1px solid var(--vd-border);
   border-radius: 6px;
   margin-bottom: 10px;
   background: var(--vd-bg-elev);
   overflow: hidden;
 }
-.vault-doctor-cleanup .vd-gc-section-header {
+.vault-doctor-pane.is-cleanup .vd-gc-section-header {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -738,88 +740,88 @@
   user-select: none;
   border-bottom: 1px solid var(--vd-border);
 }
-.vault-doctor-cleanup .vd-gc-section-header:hover {
+.vault-doctor-pane.is-cleanup .vd-gc-section-header:hover {
   background: var(--vd-bg-row);
 }
-.vault-doctor-cleanup .vd-gc-section-dot {
+.vault-doctor-pane.is-cleanup .vd-gc-section-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   display: inline-block;
 }
-.vault-doctor-cleanup .vd-gc-section-dot.critical {
+.vault-doctor-pane.is-cleanup .vd-gc-section-dot.critical {
   background: var(--vd-critical);
   box-shadow: 0 0 0 3px rgba(255, 94, 94, 0.12);
 }
-.vault-doctor-cleanup .vd-gc-section-dot.warning {
+.vault-doctor-pane.is-cleanup .vd-gc-section-dot.warning {
   background: var(--vd-warning);
   box-shadow: 0 0 0 3px rgba(255, 193, 74, 0.12);
 }
-.vault-doctor-cleanup .vd-gc-section-dot.info {
+.vault-doctor-pane.is-cleanup .vd-gc-section-dot.info {
   background: var(--vd-info);
   box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.12);
 }
-.vault-doctor-cleanup .vd-gc-section-label {
+.vault-doctor-pane.is-cleanup .vd-gc-section-label {
   font-weight: 600;
   font-size: 13px;
 }
-.vault-doctor-cleanup .vd-gc-section-critical .vd-gc-section-label {
+.vault-doctor-pane.is-cleanup .vd-gc-section-critical .vd-gc-section-label {
   color: var(--vd-critical);
 }
-.vault-doctor-cleanup .vd-gc-section-warning .vd-gc-section-label {
+.vault-doctor-pane.is-cleanup .vd-gc-section-warning .vd-gc-section-label {
   color: var(--vd-warning);
 }
-.vault-doctor-cleanup .vd-gc-section-info .vd-gc-section-label {
+.vault-doctor-pane.is-cleanup .vd-gc-section-info .vd-gc-section-label {
   color: var(--vd-info);
 }
-.vault-doctor-cleanup .vd-gc-section-count {
+.vault-doctor-pane.is-cleanup .vd-gc-section-count {
   font-size: 11px;
   color: var(--vd-text-muted);
   font-variant-numeric: tabular-nums;
 }
-.vault-doctor-cleanup .vd-gc-spacer {
+.vault-doctor-pane.is-cleanup .vd-gc-spacer {
   flex: 1;
 }
-.vault-doctor-cleanup .vd-gc-chevron {
+.vault-doctor-pane.is-cleanup .vd-gc-chevron {
   color: var(--vd-text-faint);
   font-size: 14px;
   width: 14px;
   text-align: center;
 }
-.vault-doctor-cleanup .vd-gc-section-body.hidden {
+.vault-doctor-pane.is-cleanup .vd-gc-section-body.hidden {
   display: none;
 }
 
 /* Per-rule rows */
-.vault-doctor-cleanup .vd-gc-rule-row {
+.vault-doctor-pane.is-cleanup .vd-gc-rule-row {
   display: grid;
-  grid-template-columns: 1fr 140px 110px;
-  gap: 12px;
+  grid-template-columns: 1fr 110px auto;
+  gap: 10px;
   align-items: center;
   padding: 10px 14px;
   border-bottom: 1px solid var(--vd-border);
 }
-.vault-doctor-cleanup .vd-gc-rule-row:last-child {
+.vault-doctor-pane.is-cleanup .vd-gc-rule-row:last-child {
   border-bottom: none;
 }
-.vault-doctor-cleanup .vd-gc-rule-meta {
+.vault-doctor-pane.is-cleanup .vd-gc-rule-meta {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
 }
-.vault-doctor-cleanup .vd-gc-rule-name {
+.vault-doctor-pane.is-cleanup .vd-gc-rule-name {
   color: var(--vd-text);
   font-size: 13px;
 }
-.vault-doctor-cleanup .vd-gc-rule-id {
+.vault-doctor-pane.is-cleanup .vd-gc-rule-id {
   color: var(--vd-text-faint);
   font-size: 10px;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   letter-spacing: 0.4px;
   text-transform: uppercase;
 }
-.vault-doctor-cleanup .vd-gc-action-select {
+.vault-doctor-pane.is-cleanup .vd-gc-action-select {
   background: var(--vd-bg-input);
   color: var(--vd-text);
   border: 1px solid var(--vd-border-strong);
@@ -829,22 +831,30 @@
   font-family: inherit;
   cursor: pointer;
 }
-.vault-doctor-cleanup .vd-gc-action-select:hover {
+.vault-doctor-pane.is-cleanup .vd-gc-action-select:hover {
   border-color: var(--vd-text-faint);
 }
-.vault-doctor-cleanup .vd-gc-action-select:disabled {
+.vault-doctor-pane.is-cleanup .vd-gc-action-select:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
-.vault-doctor-cleanup .vd-gc-rule-count {
+.vault-doctor-pane.is-cleanup .vd-gc-rule-count {
   color: var(--vd-text-muted);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
 
+/* Disable interactive controls during apply (cosmetic — actual wiring is
+   guarded in the JS dispatch). */
+.vault-doctor-pane.is-cleanup .vd-gc-root.is-applying .vd-gc-section-header,
+.vault-doctor-pane.is-cleanup .vd-gc-root.is-applying .vd-gc-action-select {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
 /* Summary line */
-.vault-doctor-cleanup .vd-gc-summary {
+.vault-doctor-pane.is-cleanup .vd-gc-summary {
   margin-top: 14px;
   padding: 10px 14px;
   background: var(--vd-bg-row);
@@ -853,28 +863,26 @@
   font-size: 12px;
   color: var(--vd-text-muted);
 }
-.vault-doctor-cleanup .vd-gc-summary-score {
+.vault-doctor-pane.is-cleanup .vd-gc-summary-score {
   color: var(--vd-text);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.vault-doctor-cleanup .vd-gc-summary-score.gain {
+.vault-doctor-pane.is-cleanup .vd-gc-summary-score.gain {
   color: var(--vd-good);
 }
 
 /* Sticky action bar */
-.vault-doctor-cleanup .vd-gc-actions {
+.vault-doctor-pane.is-cleanup .vd-gc-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 16px;
-  padding-top: 12px;
+  padding: 10px 14px;
+  background: var(--vd-bg-elev);
   border-top: 1px solid var(--vd-border);
-  position: sticky;
-  bottom: 0;
-  background: var(--vd-bg);
+  flex: 0 0 auto;
 }
-.vault-doctor-cleanup .vd-gc-btn {
+.vault-doctor-pane.is-cleanup .vd-gc-btn {
   background: var(--vd-bg-input);
   border: 1px solid var(--vd-border-strong);
   color: var(--vd-text);
@@ -886,20 +894,20 @@
   font-family: inherit;
   box-shadow: none;
 }
-.vault-doctor-cleanup .vd-gc-btn:hover:not(:disabled) {
+.vault-doctor-pane.is-cleanup .vd-gc-btn:hover:not(:disabled) {
   background: #222;
   border-color: #333;
 }
-.vault-doctor-cleanup .vd-gc-btn.primary {
+.vault-doctor-pane.is-cleanup .vd-gc-btn.primary {
   background: var(--vd-accent);
   border-color: var(--vd-accent);
   color: #fff;
 }
-.vault-doctor-cleanup .vd-gc-btn.primary:hover:not(:disabled) {
+.vault-doctor-pane.is-cleanup .vd-gc-btn.primary:hover:not(:disabled) {
   background: var(--vd-accent-hover);
   border-color: var(--vd-accent-hover);
 }
-.vault-doctor-cleanup .vd-gc-btn:disabled {
+.vault-doctor-pane.is-cleanup .vd-gc-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

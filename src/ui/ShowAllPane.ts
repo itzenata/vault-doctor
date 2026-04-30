@@ -1,23 +1,33 @@
-import { Modal, type App } from "obsidian";
+import { type App } from "obsidian";
 import type { Issue, Rule } from "../types";
 
 /**
- * "Show all" modal — full list of issues for a single rule, with bulk
- * action affordances (search, multi-select, whitelist/archive).
+ * "Show all" sub-view — full list of issues for a single rule, with bulk
+ * action affordances (search, multi-select, whitelist/archive). Renders
+ * INSIDE the Vault Doctor pane (not as a floating modal) so the user
+ * stays in the same conceptual surface.
  *
  * Public contract:
- *   new ShowAllModal(app, rule, issues, opts).open()
- *   opts.onAction(actionId, scope) — called when the user picks a bulk action
- *     ("archive" | "delete" | "whitelist" | "open"). The dashboard re-runs a
- *     scan after a successful one. "delete" is intentionally NOT exposed in
- *     this modal — bulk delete is too destructive; users delete per-issue
- *     via the dashboard's existing confirmation flow.
+ *   const pane = new ShowAllPane(app, rule, issues, opts);
+ *   pane.render(parentEl);
+ *   // ...later, when navigating away:
+ *   pane.dispose();
+ *
+ * opts.onAction(actionId, scope) — called when the user picks a bulk action
+ *   ("archive" | "whitelist" | "open"). The dashboard re-runs a scan after a
+ *   successful one. "delete" is intentionally NOT exposed here — bulk delete
+ *   is too destructive; users delete per-issue via the dashboard's existing
+ *   confirmation flow.
+ *
+ * opts.onDone — called after a successful bulk action so the host can
+ *   navigate back to the dashboard view.
  */
-export interface ShowAllModalOptions {
+export interface ShowAllPaneOptions {
   onAction?: (
     actionId: "archive" | "delete" | "whitelist" | "open",
     scope: Issue[],
   ) => Promise<void>;
+  onDone?: () => void;
 }
 
 interface IssueEntry {
@@ -33,14 +43,16 @@ interface IssueEntry {
 
 const SEARCH_DEBOUNCE_MS = 120;
 
-export class ShowAllModal extends Modal {
+export class ShowAllPane {
   private readonly entries: IssueEntry[];
   private readonly selected = new Set<string>();
   private filteredKeys: string[] = [];
   private searchQuery = "";
   private searchDebounce: number | null = null;
+  private disposed = false;
 
-  // Live element handles, populated in onOpen.
+  // Live element handles, populated in render().
+  private rootEl: HTMLElement | null = null;
   private searchInputEl: HTMLInputElement | null = null;
   private toggleAllBtnEl: HTMLButtonElement | null = null;
   private selectionCountEl: HTMLElement | null = null;
@@ -50,12 +62,11 @@ export class ShowAllModal extends Modal {
   private archiveBtnEl: HTMLButtonElement | null = null;
 
   constructor(
-    app: App,
+    private readonly app: App,
     private readonly rule: Rule,
     private readonly issues: Issue[],
-    private readonly opts: ShowAllModalOptions = {},
+    private readonly opts: ShowAllPaneOptions = {},
   ) {
-    super(app);
     this.entries = issues.map((issue, idx) => {
       const target = issue.context?.targetPath ?? "";
       const key = hashKey(
@@ -72,17 +83,16 @@ export class ShowAllModal extends Modal {
     this.filteredKeys = this.entries.map((e) => e.key);
   }
 
-  onOpen(): void {
-    this.modalEl.addClass("mod-wide");
-    const { contentEl } = this;
-    contentEl.empty();
-    contentEl.addClass("vault-doctor-show-all");
+  render(parent: HTMLElement): void {
+    parent.empty();
+    const root = parent.createDiv({ cls: "vd-sa-root" });
+    this.rootEl = root;
 
-    this.renderHeader(contentEl);
-    this.renderSearch(contentEl);
-    this.renderToolbar(contentEl);
-    this.renderTableShell(contentEl);
-    this.renderActionBar(contentEl);
+    this.renderSubtitle(root);
+    this.renderSearch(root);
+    this.renderToolbar(root);
+    this.renderTableShell(root);
+    this.renderActionBar(root);
 
     this.applyFilter();
 
@@ -90,20 +100,34 @@ export class ShowAllModal extends Modal {
     this.searchInputEl?.focus();
   }
 
-  onClose(): void {
+  /**
+   * Releases timers and clears element references. Must be called when the
+   * host navigates away — otherwise a pending debounced search timer can
+   * fire after the pane has been re-rendered to a different view, calling
+   * applyFilter() against a detached DOM tree.
+   */
+  dispose(): void {
+    this.disposed = true;
     if (this.searchDebounce !== null) {
       window.clearTimeout(this.searchDebounce);
       this.searchDebounce = null;
     }
-    this.contentEl.empty();
+    this.rootEl = null;
+    this.searchInputEl = null;
+    this.toggleAllBtnEl = null;
+    this.selectionCountEl = null;
+    this.tableEl = null;
+    this.emptyStateEl = null;
+    this.whitelistBtnEl = null;
+    this.archiveBtnEl = null;
   }
 
   // ---------------------------------------------------------------------------
-  // Header / subtitle
+  // Subtitle (issue count + severity chip — the rule name lives in the
+  // breadcrumb, so we don't duplicate it here)
   // ---------------------------------------------------------------------------
-  private renderHeader(parent: HTMLElement): void {
+  private renderSubtitle(parent: HTMLElement): void {
     const header = parent.createDiv({ cls: "vd-sa-header" });
-    header.createEl("h2", { cls: "vd-sa-title", text: this.rule.name });
     const sub = header.createDiv({ cls: "vd-sa-subtitle" });
     const n = this.issues.length;
     sub.appendText(`${n} issue${n === 1 ? "" : "s"} · severity: `);
@@ -134,6 +158,7 @@ export class ShowAllModal extends Modal {
       }
       this.searchDebounce = window.setTimeout(() => {
         this.searchDebounce = null;
+        if (this.disposed) return;
         this.searchQuery = input.value.trim().toLowerCase();
         this.applyFilter();
       }, SEARCH_DEBOUNCE_MS);
@@ -201,6 +226,8 @@ export class ShowAllModal extends Modal {
   }
 
   private buildRow(entry: IssueEntry): HTMLElement {
+    // Stack vertically for narrow sidebar pane: path on top, context below,
+    // checkbox on the left, "Open" link on the right.
     const row = createDiv({ cls: "vd-sa-row" });
     if (this.selected.has(entry.key)) {
       row.addClass("is-selected");
@@ -221,15 +248,14 @@ export class ShowAllModal extends Modal {
       row.toggleClass("is-selected", checkbox.checked);
     });
 
-    // Path (monospace, ellipsis on overflow)
-    const path = row.createDiv({
+    // Stacked text column: path on top, context below.
+    const textCol = row.createDiv({ cls: "vd-sa-row-text" });
+    const path = textCol.createDiv({
       cls: "vd-sa-row-path",
       text: entry.issue.notePath,
     });
     path.setAttr("title", entry.issue.notePath);
-
-    // Context label
-    const ctx = row.createDiv({
+    const ctx = textCol.createDiv({
       cls: "vd-sa-row-ctx",
       text: entry.context,
     });
@@ -262,16 +288,10 @@ export class ShowAllModal extends Modal {
   }
 
   // ---------------------------------------------------------------------------
-  // Action bar
+  // Action bar (sticky at the bottom of the pane)
   // ---------------------------------------------------------------------------
   private renderActionBar(parent: HTMLElement): void {
     const bar = parent.createDiv({ cls: "vd-sa-actions" });
-
-    const cancel = bar.createEl("button", {
-      cls: "vd-btn",
-      text: "Cancel",
-    });
-    cancel.addEventListener("click", () => this.close());
 
     const spacer = bar.createDiv({ cls: "vd-sa-actions-spacer" });
     void spacer;
@@ -385,7 +405,9 @@ export class ShowAllModal extends Modal {
     try {
       await handler(actionId, scope);
     } finally {
-      this.close();
+      // Hand back control to the host: the dashboard will navigate away
+      // (and a rescan will produce a fresh issue list anyway).
+      this.opts.onDone?.();
     }
   }
 

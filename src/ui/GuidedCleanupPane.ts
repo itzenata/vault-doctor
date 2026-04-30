@@ -1,4 +1,4 @@
-import { Modal, Notice, type App } from "obsidian";
+import { Notice, type App } from "obsidian";
 import type { ActionId, Issue, Rule, ScanResult, Severity } from "../types";
 import type { VaultDoctorPluginWithEngine } from "../engine";
 import type {
@@ -62,6 +62,21 @@ interface RuleEntry {
   action: WizardAction;
 }
 
+export interface GuidedCleanupPaneOptions {
+  /**
+   * Called after Apply completes (success, partial, or no-op-from-empty).
+   * The host uses this to navigate back to the dashboard and trigger a
+   * rescan so the score and issue counts reflect the new vault state.
+   */
+  onDone?: () => void;
+  /**
+   * Called when the back button or onDone-style external trigger should be
+   * disabled/enabled. The host wires this to its breadcrumb back-arrow so
+   * the user can't navigate away mid-apply.
+   */
+  onApplyingChange?: (applying: boolean) => void;
+}
+
 /**
  * Guided Cleanup wizard — single-pane "review and apply" flow.
  *
@@ -70,28 +85,26 @@ interface RuleEntry {
  * batch through `plugin.actions.execute`. One Notice per phase; per-issue
  * errors aggregate into the final summary.
  *
- * Public contract:
- *   new GuidedCleanupModal(app, plugin, scanResult).open()
+ * Renders INSIDE the Vault Doctor pane (no floating modal). The breadcrumb
+ * back-arrow in the host serves as Cancel; we tell the host to disable it
+ * during the apply phase via `opts.onApplyingChange`.
  */
-export class GuidedCleanupModal extends Modal {
-  private readonly plugin: CleanupPlugin;
-  private readonly scanResult: ScanResult;
+export class GuidedCleanupPane {
   private readonly entries: RuleEntry[];
   private readonly issuesByRule: Map<string, Issue[]>;
   private readonly collapsed: Set<Severity>;
   private isApplying = false;
   private applyButton: HTMLButtonElement | null = null;
-  private cancelButton: HTMLButtonElement | null = null;
   private summaryEl: HTMLElement | null = null;
+  private rootEl: HTMLElement | null = null;
 
   constructor(
-    app: App,
-    plugin: VaultDoctorPluginWithEngine & VaultDoctorPluginWithActions,
-    scanResult: ScanResult,
+    private readonly app: App,
+    private readonly plugin: CleanupPlugin,
+    private readonly scanResult: ScanResult,
+    private readonly opts: GuidedCleanupPaneOptions = {},
   ) {
-    super(app);
-    this.plugin = plugin;
-    this.scanResult = scanResult;
+    void this.app;
 
     // Bucket issues by ruleId once. We reuse this map both for per-row counts
     // and for the actual apply dispatch (no second pass over the issue list).
@@ -119,25 +132,41 @@ export class GuidedCleanupModal extends Modal {
     this.collapsed = new Set<Severity>(["info"]);
   }
 
-  onOpen(): void {
-    const { contentEl } = this;
-    contentEl.empty();
-    contentEl.addClass("vault-doctor-cleanup");
-    this.modalEl.addClass("mod-wide");
+  render(parent: HTMLElement): void {
+    parent.empty();
+    const root = parent.createDiv({ cls: "vd-gc-root" });
+    this.rootEl = root;
 
     if (this.scanResult.issues.length === 0) {
-      this.renderEmpty(contentEl);
+      this.renderEmpty(root);
       return;
     }
 
-    this.renderHeader(contentEl);
-    this.renderSeveritySections(contentEl);
-    this.renderSummary(contentEl);
-    this.renderActions(contentEl);
+    const scroll = root.createDiv({ cls: "vd-gc-scroll" });
+    this.renderSubtitle(scroll);
+    this.renderSeveritySections(scroll);
+    this.renderSummary(scroll);
+    this.renderActions(root);
   }
 
-  onClose(): void {
-    this.contentEl.empty();
+  /**
+   * Releases element references. No timers to clear — the wizard's only
+   * async work is the apply loop which checks `isApplying` before mutating
+   * anything, and disposing while applying would be a host bug (the host
+   * disables the back-arrow during apply, so the user can't navigate away).
+   */
+  dispose(): void {
+    this.rootEl = null;
+    this.applyButton = null;
+    this.summaryEl = null;
+  }
+
+  /**
+   * True while the apply loop is running. The host should consult this
+   * before allowing back-navigation.
+   */
+  get applying(): boolean {
+    return this.isApplying;
   }
 
   // -------------------------------------------------------------------------
@@ -145,7 +174,6 @@ export class GuidedCleanupModal extends Modal {
   // -------------------------------------------------------------------------
 
   private renderEmpty(parent: HTMLElement): void {
-    parent.createEl("h2", { text: "Guided Cleanup" });
     parent.createEl("p", {
       cls: "vd-gc-empty",
       text: "Nothing to clean up — vault is healthy.",
@@ -153,14 +181,14 @@ export class GuidedCleanupModal extends Modal {
     const bar = parent.createDiv({ cls: "vd-gc-actions" });
     const closeBtn = bar.createEl("button", {
       cls: "vd-gc-btn primary",
-      text: "Close",
+      text: "Back to dashboard",
     });
-    closeBtn.addEventListener("click", () => this.close());
+    closeBtn.addEventListener("click", () => {
+      this.opts.onDone?.();
+    });
   }
 
-  private renderHeader(parent: HTMLElement): void {
-    parent.createEl("h2", { text: "Guided Cleanup" });
-
+  private renderSubtitle(parent: HTMLElement): void {
     const counts = countBySeverity(this.scanResult.issues);
     const subtitle = parent.createDiv({ cls: "vd-gc-subtitle" });
     subtitle.appendText(
@@ -336,15 +364,9 @@ export class GuidedCleanupModal extends Modal {
   private renderActions(parent: HTMLElement): void {
     const bar = parent.createDiv({ cls: "vd-gc-actions" });
 
-    const cancel = bar.createEl("button", {
-      cls: "vd-gc-btn",
-      text: "Cancel",
-    });
-    cancel.addEventListener("click", () => {
-      if (this.isApplying) return;
-      this.close();
-    });
-    this.cancelButton = cancel;
+    // No Cancel button — the breadcrumb back-arrow in the host serves that
+    // purpose. The host disables the back-arrow during apply via the
+    // onApplyingChange callback.
 
     const apply = bar.createEl("button", {
       cls: "vd-gc-btn primary",
@@ -370,6 +392,7 @@ export class GuidedCleanupModal extends Modal {
     if (active.length === 0) return;
 
     this.isApplying = true;
+    this.opts.onApplyingChange?.(true);
     this.setApplyingState(true);
 
     new Notice("Applying cleanup...");
@@ -410,7 +433,10 @@ export class GuidedCleanupModal extends Modal {
     }
 
     this.isApplying = false;
-    this.close();
+    this.opts.onApplyingChange?.(false);
+    // Hand control back to the host so it can navigate to the dashboard
+    // and trigger a rescan.
+    this.opts.onDone?.();
   }
 
   private setApplyingState(applying: boolean): void {
@@ -421,8 +447,10 @@ export class GuidedCleanupModal extends Modal {
         this.applyButton.appendText("Applying…");
       }
     }
-    if (this.cancelButton !== null) {
-      this.cancelButton.disabled = applying;
+    // Disable the per-rule selects and section headers cosmetically by
+    // tagging the root; CSS handles the visuals.
+    if (this.rootEl !== null) {
+      this.rootEl.toggleClass("is-applying", applying);
     }
   }
 }

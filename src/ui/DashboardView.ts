@@ -6,8 +6,8 @@ import type {
   VaultDoctorPluginWithActions,
 } from "../actions";
 import { ALL_RULES } from "../rules";
-import { ShowAllModal } from "./ShowAllModal";
-import { GuidedCleanupModal } from "./GuidedCleanupModal";
+import { ShowAllPane } from "./ShowAllPane";
+import { GuidedCleanupPane } from "./GuidedCleanupPane";
 
 type SortMode = "impact" | "count" | "name";
 
@@ -18,6 +18,20 @@ type SortMode = "impact" | "count" | "name";
  */
 type DashboardPlugin = VaultDoctorPluginWithEngine &
   VaultDoctorPluginWithActions;
+
+/**
+ * The pane is a multi-view controller. The active view is one of:
+ *   - dashboard:  the score gauge + issues table (the default)
+ *   - showAll:    full list of issues for a single rule (was ShowAllModal)
+ *   - cleanup:    guided cleanup wizard (was GuidedCleanupModal)
+ *
+ * `render()` switches on `kind` and dispatches to the matching renderer.
+ * Sub-views also render the breadcrumb top-nav (back-arrow + crumbs).
+ */
+type ActiveView =
+  | { kind: "dashboard" }
+  | { kind: "showAll"; rule: Rule; issues: Issue[] }
+  | { kind: "cleanup"; scanResult: ScanResult };
 
 // ---------------------------------------------------------------------------
 // View
@@ -57,6 +71,21 @@ export class DashboardView extends ItemView {
   private sortMode: SortMode = "impact";
   private expandedRuleIds: Set<string> = new Set();
 
+  /** Active sub-view (or `dashboard`). All renders go through `render()`. */
+  private activeView: ActiveView = { kind: "dashboard" };
+  /**
+   * Live pane instances for sub-views. Stashed so we can call dispose()
+   * when navigating away (clears debounce timers, releases element refs).
+   */
+  private activeShowAll: ShowAllPane | null = null;
+  private activeCleanup: GuidedCleanupPane | null = null;
+  /**
+   * Mirrors `activeCleanup.applying` so the breadcrumb back-arrow knows
+   * whether it should be disabled. Updated via the cleanup pane's
+   * `onApplyingChange` callback.
+   */
+  private cleanupApplying = false;
+
   constructor(leaf: WorkspaceLeaf, plugin: VaultDoctorPluginWithEngine) {
     super(leaf);
     // The actions module is registered alongside the engine; we narrow once
@@ -79,7 +108,8 @@ export class DashboardView extends ItemView {
   async onOpen(): Promise<void> {
     this.contentEl.addClass("vault-doctor-pane");
     this.currentResult = null;
-    this.render(null);
+    this.activeView = { kind: "dashboard" };
+    this.render();
 
     // Auto-scan on open. Don't await — empty state stays visible until done.
     // If the engine hasn't attached the scanner yet (race during plugin load),
@@ -90,23 +120,66 @@ export class DashboardView extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    this.disposeActivePane();
     this.contentEl.empty();
   }
 
   // -------------------------------------------------------------------------
-  // Top-level render
+  // Top-level render — routes to the active view
   // -------------------------------------------------------------------------
 
-  private render(result: ScanResult | null): void {
+  private render(): void {
     const root = this.contentEl;
     root.empty();
     root.addClass("vault-doctor-pane");
+    // Reset modifier classes so a stale class from a prior render doesn't
+    // bleed across navigation.
+    root.removeClass("is-show-all");
+    root.removeClass("is-cleanup");
 
-    this.renderHeader(root, result);
-    this.renderSummary(root, result);
-    this.renderSectionLabel(root);
-    this.renderTable(root, result);
-    this.renderFooter(root, result);
+    switch (this.activeView.kind) {
+      case "dashboard":
+        this.renderDashboard(root);
+        break;
+      case "showAll":
+        root.addClass("is-show-all");
+        this.renderShowAll(
+          root,
+          this.activeView.rule,
+          this.activeView.issues,
+        );
+        break;
+      case "cleanup":
+        root.addClass("is-cleanup");
+        this.renderCleanup(root, this.activeView.scanResult);
+        break;
+    }
+  }
+
+  /**
+   * Dispose any active sub-view pane (ShowAll / Cleanup). Safe to call
+   * multiple times; clears references afterward.
+   */
+  private disposeActivePane(): void {
+    if (this.activeShowAll !== null) {
+      this.activeShowAll.dispose();
+      this.activeShowAll = null;
+    }
+    if (this.activeCleanup !== null) {
+      this.activeCleanup.dispose();
+      this.activeCleanup = null;
+    }
+    this.cleanupApplying = false;
+  }
+
+  /**
+   * Navigate back to the dashboard. Disposes the current sub-view pane
+   * (if any) and re-renders.
+   */
+  private goToDashboard(): void {
+    this.disposeActivePane();
+    this.activeView = { kind: "dashboard" };
+    this.render();
   }
 
   // -------------------------------------------------------------------------
@@ -132,7 +205,16 @@ export class DashboardView extends ItemView {
       if (firstCritIssue) {
         this.expandedRuleIds.add(firstCritIssue.ruleId);
       }
-      this.render(result);
+
+      // If a rescan finishes while the user is in a sub-view, the data the
+      // sub-view was showing is now stale. Bounce back to the dashboard so
+      // the user sees the fresh score; otherwise just re-render.
+      if (this.activeView.kind !== "dashboard") {
+        new Notice("Scan complete — returning to dashboard");
+        this.disposeActivePane();
+        this.activeView = { kind: "dashboard" };
+      }
+      this.render();
       new Notice(
         `Vault score: ${Math.round(result.score)} · ${result.issues.length} issues`,
       );
@@ -142,8 +224,16 @@ export class DashboardView extends ItemView {
   }
 
   // -------------------------------------------------------------------------
-  // Sections
+  // Dashboard view
   // -------------------------------------------------------------------------
+
+  private renderDashboard(parent: HTMLElement): void {
+    this.renderHeader(parent, this.currentResult);
+    this.renderSummary(parent, this.currentResult);
+    this.renderSectionLabel(parent);
+    this.renderTable(parent, this.currentResult);
+    this.renderFooter(parent, this.currentResult);
+  }
 
   private renderHeader(parent: HTMLElement, result: ScanResult | null): void {
     const header = parent.createDiv({ cls: "vd-pane-header" });
@@ -167,17 +257,7 @@ export class DashboardView extends ItemView {
       void this.runScan();
     });
 
-    const settingsBtn = header.createEl("button", { cls: "vd-icon-btn" });
-    settingsBtn.setAttr("title", "Settings");
-    settingsBtn.setAttr("aria-label", "Settings");
-    this.applyIcon(settingsBtn, "settings", "cog");
-    settingsBtn.addEventListener("click", () => {
-      const settingHost = this.app as unknown as {
-        setting: { open(): void; openTabById(id: string): void };
-      };
-      settingHost.setting.open();
-      settingHost.setting.openTabById("vault-doctor");
-    });
+    this.renderSettingsButton(header);
   }
 
   private renderSummary(parent: HTMLElement, result: ScanResult | null): void {
@@ -285,7 +365,7 @@ export class DashboardView extends ItemView {
       const order: SortMode[] = ["impact", "count", "name"];
       const idx = order.indexOf(this.sortMode);
       this.sortMode = order[(idx + 1) % order.length];
-      this.render(this.currentResult);
+      this.render();
     });
   }
 
@@ -356,7 +436,7 @@ export class DashboardView extends ItemView {
       } else {
         this.expandedRuleIds.add(rule.id);
       }
-      this.render(this.currentResult);
+      this.render();
     });
   }
 
@@ -406,11 +486,12 @@ export class DashboardView extends ItemView {
       text: "Show all",
     });
     showAllBtn.addEventListener("click", () => {
-      new ShowAllModal(this.app, rule, issues, {
-        onAction: async (actionId, scope) => {
-          await this.runAction(actionId, scope, { rescan: true });
-        },
-      }).open();
+      // Navigate to the in-pane Show All sub-view rather than opening a
+      // floating modal. State swap + re-render keeps the user in one
+      // surface; the breadcrumb back-arrow returns them here.
+      this.disposeActivePane();
+      this.activeView = { kind: "showAll", rule, issues };
+      this.render();
     });
 
     const whitelistBtn = actions.createEl("button", {
@@ -460,12 +541,128 @@ export class DashboardView extends ItemView {
         new Notice("Run a scan first");
         return;
       }
-      new GuidedCleanupModal(
-        this.app,
-        this.plugin,
-        this.currentResult,
-      ).open();
+      this.disposeActivePane();
+      this.activeView = {
+        kind: "cleanup",
+        scanResult: this.currentResult,
+      };
+      this.render();
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // Sub-views: breadcrumb top-nav + ShowAll/Cleanup panes
+  // -------------------------------------------------------------------------
+
+  /**
+   * Render the breadcrumb top-nav for sub-views: back-arrow + crumbs +
+   * settings cog. The back-arrow is disabled while the cleanup pane is
+   * applying so the user can't navigate away mid-mutation.
+   */
+  private renderBreadcrumb(
+    parent: HTMLElement,
+    pageLabel: string,
+    backDisabled: boolean,
+  ): void {
+    const bar = parent.createDiv({ cls: "vd-breadcrumb" });
+
+    const backBtn = bar.createEl("button", { cls: "vd-icon-btn vd-bc-back" });
+    backBtn.setAttr("title", "Back to dashboard");
+    backBtn.setAttr("aria-label", "Back to dashboard");
+    this.applyIcon(backBtn, "arrow-left", "chevron-left");
+    if (backDisabled) {
+      backBtn.disabled = true;
+      backBtn.addClass("is-disabled");
+    } else {
+      backBtn.addEventListener("click", () => {
+        this.goToDashboard();
+      });
+    }
+
+    const crumbs = bar.createDiv({ cls: "vd-bc-crumbs" });
+    const root = crumbs.createSpan({
+      cls: "vd-bc-root",
+      text: "Vault Doctor",
+    });
+    root.setAttr("title", "Back to dashboard");
+    if (!backDisabled) {
+      root.addEventListener("click", () => {
+        this.goToDashboard();
+      });
+    }
+    crumbs.createSpan({ cls: "vd-bc-sep", text: "/" });
+    crumbs.createSpan({ cls: "vd-bc-current", text: pageLabel });
+
+    bar.createSpan({ cls: "vd-spacer" });
+
+    this.renderSettingsButton(bar);
+  }
+
+  private renderShowAll(
+    parent: HTMLElement,
+    rule: Rule,
+    issues: Issue[],
+  ): void {
+    this.renderBreadcrumb(parent, rule.name, false);
+
+    const body = parent.createDiv({ cls: "vd-subview-body" });
+    const pane = new ShowAllPane(this.app, rule, issues, {
+      onAction: async (actionId, scope) => {
+        // Re-route through the dashboard's action funnel so the user gets the
+        // same Notices / partial-failure handling as direct dashboard clicks.
+        // The rescan inside runAction will navigate us back to dashboard
+        // automatically (see runScan).
+        await this.runAction(actionId, scope, { rescan: true });
+      },
+      onDone: () => {
+        // If a rescan was scheduled by runAction it has already re-rendered;
+        // for "open" we don't navigate. For bulk actions, fall back to
+        // dashboard explicitly in case rescan is a no-op.
+        if (this.activeView.kind === "showAll") {
+          this.goToDashboard();
+        }
+      },
+    });
+    this.activeShowAll = pane;
+    pane.render(body);
+  }
+
+  private renderCleanup(parent: HTMLElement, scanResult: ScanResult): void {
+    this.renderBreadcrumb(parent, "Guided Cleanup", this.cleanupApplying);
+
+    const body = parent.createDiv({ cls: "vd-subview-body" });
+    const pane = new GuidedCleanupPane(this.app, this.plugin, scanResult, {
+      onApplyingChange: (applying) => {
+        // Re-render the breadcrumb when the apply state flips so the
+        // back-arrow's disabled state stays in sync. We rebuild the whole
+        // sub-view to keep the path simple — render() is cheap and
+        // reusing the cleanup pane instance would mean wiring an internal
+        // re-render hook just for the back-arrow.
+        this.cleanupApplying = applying;
+        // Toggle the disabled class on the existing back-arrow without a
+        // full re-render — the cleanup pane has interactive state we don't
+        // want to throw away.
+        const backBtn = this.contentEl.querySelector(
+          ".vd-bc-back",
+        ) as HTMLButtonElement | null;
+        if (backBtn !== null) {
+          backBtn.disabled = applying;
+          backBtn.toggleClass("is-disabled", applying);
+        }
+      },
+      onDone: () => {
+        // Apply finished (or empty-state user clicked "Back to dashboard").
+        // Trigger a rescan so the dashboard reflects the new vault state;
+        // runScan() itself will navigate back to dashboard.
+        if (this.plugin.scanner !== undefined) {
+          void this.runScan();
+        } else {
+          this.goToDashboard();
+        }
+      },
+    });
+    this.activeCleanup = pane;
+    pane.render(body);
   }
 
   // -------------------------------------------------------------------------
@@ -548,6 +745,24 @@ export class DashboardView extends ItemView {
   // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
+
+  /**
+   * Render the settings cog button. Used by both the dashboard header and
+   * the sub-view breadcrumb so behaviour stays consistent.
+   */
+  private renderSettingsButton(host: HTMLElement): void {
+    const settingsBtn = host.createEl("button", { cls: "vd-icon-btn" });
+    settingsBtn.setAttr("title", "Settings");
+    settingsBtn.setAttr("aria-label", "Settings");
+    this.applyIcon(settingsBtn, "settings", "cog");
+    settingsBtn.addEventListener("click", () => {
+      const settingHost = this.app as unknown as {
+        setting: { open(): void; openTabById(id: string): void };
+      };
+      settingHost.setting.open();
+      settingHost.setting.openTabById("vault-doctor");
+    });
+  }
 
   /**
    * Apply a Lucide icon by name. Falls back to a secondary icon and finally
