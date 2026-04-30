@@ -4,7 +4,11 @@
 
 ## Status
 
-🟡 **Pre-alpha** — design phase, no installable build yet. First mockup is in [`mockup.html`](./mockup.html).
+🟡 **Pre-alpha** — design phase, no installable build yet.
+
+![Vault Doctor dashboard mockup](./mockup.png)
+
+*Static preview of the planned dashboard — see [`mockup.html`](./mockup.html) for the live version.*
 
 ## What it will do
 
