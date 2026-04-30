@@ -26,9 +26,14 @@ import type { VaultDoctorSettings } from "../settings/types";
 interface ExclusionConfig {
   folders: string[]; // already normalized: lowercased, no leading/trailing slash
   tags: string[]; // already normalized: lowercased, no leading "#"
+  whitelistedPaths: Set<string>; // exact-match path lookup
 }
 
-const EMPTY_EXCLUSIONS: ExclusionConfig = { folders: [], tags: [] };
+const EMPTY_EXCLUSIONS: ExclusionConfig = {
+  folders: [],
+  tags: [],
+  whitelistedPaths: new Set(),
+};
 
 export class Scanner {
   private readonly plugin: Plugin;
@@ -64,6 +69,11 @@ export class Scanner {
       const noteTags = cache?.tags?.map((t) => t.tag) ?? [];
 
       if (this.shouldSkipNote(file, noteTags, exclusions)) continue;
+      // Honour explicit whitelist: per-file `vault-doctor: ignore` frontmatter
+      // OR inclusion in `settings.whitelistedPaths`. Either path keeps the
+      // note out of every rule downstream.
+      if (exclusions.whitelistedPaths.has(file.path)) continue;
+      if (cache?.frontmatter?.["vault-doctor"] === "ignore") continue;
 
       const content = await app.vault.cachedRead(file);
       const body = stripFrontmatter(content);
@@ -134,6 +144,7 @@ export class Scanner {
     for (const file of allFiles) {
       if (file.extension === "md") continue;
       if (this.matchesExcludedFolder(file.path, exclusions.folders)) continue;
+      if (exclusions.whitelistedPaths.has(file.path)) continue;
       const refs = inbound.get(file.path) ?? [];
       const att: AttachmentMeta = {
         path: file.path,
@@ -176,6 +187,7 @@ export class Scanner {
         : {
             folders: normalizeFolderEntries(settings.excludedFolders),
             tags: normalizeTagEntries(settings.excludedTags),
+            whitelistedPaths: new Set(settings.whitelistedPaths ?? []),
           };
 
     // A rule id missing from the persisted map (e.g. a rule shipped after the

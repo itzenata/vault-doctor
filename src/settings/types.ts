@@ -28,6 +28,12 @@ export interface VaultDoctorSettings {
   autoBackup: boolean;
   /** Confirmation prompt threshold for bulk operations. */
   bulkConfirmThreshold: number;
+  /**
+   * Paths whitelisted by the user — never reported as issues. Markdown notes
+   * normally use `vault-doctor: ignore` in frontmatter; this list is the
+   * fallback for files that can't carry frontmatter (images, PDFs, etc.).
+   */
+  whitelistedPaths: string[];
 }
 
 /**
@@ -51,6 +57,7 @@ export const DEFAULT_SETTINGS: VaultDoctorSettings = {
   dryRunDefault: true,
   autoBackup: true,
   bulkConfirmThreshold: 5,
+  whitelistedPaths: [],
 };
 
 /**

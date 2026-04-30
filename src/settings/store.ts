@@ -53,6 +53,7 @@ function cloneSettings(s: VaultDoctorSettings): VaultDoctorSettings {
     enabledRules: { ...s.enabledRules },
     excludedFolders: [...s.excludedFolders],
     excludedTags: [...s.excludedTags],
+    whitelistedPaths: [...s.whitelistedPaths],
   };
 }
 
@@ -78,5 +79,8 @@ function mergeSettings(
     excludedTags: override.excludedTags
       ? [...override.excludedTags]
       : [...base.excludedTags],
+    whitelistedPaths: override.whitelistedPaths
+      ? [...override.whitelistedPaths]
+      : [...base.whitelistedPaths],
   };
 }

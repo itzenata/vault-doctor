@@ -63,18 +63,41 @@ export async function trashFile(plugin: Plugin, issue: Issue): Promise<void> {
 }
 
 /**
- * Persist a `vault-doctor: ignore` marker in the note's frontmatter. Rules
- * that respect the whitelist (orphan-note, empty-note, …) can later read
- * this key from the metadataCache and skip the file.
+ * Persist a "do not flag this file again" marker.
  *
- * `processFrontMatter` creates a frontmatter block when none exists, so this
- * works on plain markdown notes too.
+ *   - Markdown notes:  `vault-doctor: ignore` in frontmatter (survives reindex,
+ *                      travels with the file if it's moved across vaults).
+ *   - Other files:     append the path to settings.whitelistedPaths since
+ *                      `processFrontMatter` only works on markdown.
+ *
+ * The scanner consults both mechanisms when building the vault index, so
+ * downstream rules don't need to know which one was used.
  */
 export async function whitelist(plugin: Plugin, issue: Issue): Promise<void> {
   const file = resolveFile(plugin, issue);
-  await plugin.app.fileManager.processFrontMatter(file, (fm) => {
-    fm["vault-doctor"] = "ignore";
-  });
+  if (file.extension === "md") {
+    await plugin.app.fileManager.processFrontMatter(file, (fm) => {
+      fm["vault-doctor"] = "ignore";
+    });
+    return;
+  }
+
+  // Non-markdown (image, PDF, audio, …): persist via the settings list.
+  const pluginWithSettings = plugin as Plugin & {
+    settings?: {
+      values: { whitelistedPaths: string[] };
+      update: (key: "whitelistedPaths", value: string[]) => Promise<void>;
+    };
+  };
+  const store = pluginWithSettings.settings;
+  if (store === undefined) {
+    throw new Error(
+      "Settings store unavailable; cannot whitelist non-markdown file",
+    );
+  }
+  const current = store.values.whitelistedPaths;
+  if (current.includes(file.path)) return; // already whitelisted, no-op
+  await store.update("whitelistedPaths", [...current, file.path]);
 }
 
 /**

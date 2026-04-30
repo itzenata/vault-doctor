@@ -290,13 +290,24 @@ class ReplacementSuggester extends SuggestModal<TFile> {
     if (trimmed === "") {
       return files.slice(0, MAX_SUGGESTIONS);
     }
+    // Match against basename AND full path; basename matches score higher
+    // because users typically refer to notes by their short name. Without
+    // this, typing "Q3 Roadmap" wouldn't surface a file named exactly that
+    // unless its folder hierarchy also contained those characters.
     const fuzzy = prepareFuzzySearch(trimmed);
     const ranked: FuzzyMatch<TFile>[] = [];
     for (const file of files) {
-      const result: SearchResult | null = fuzzy(file.path);
-      if (result !== null) {
-        ranked.push({ item: file, match: result });
-      }
+      const baseHit: SearchResult | null = fuzzy(file.basename);
+      const pathHit: SearchResult | null = fuzzy(file.path);
+      const baseScore = baseHit?.score ?? Number.NEGATIVE_INFINITY;
+      const pathScore = pathHit?.score ?? Number.NEGATIVE_INFINITY;
+      // basename match weighted +0.5 so an exact basename beats a longer
+      // path with the same characters scattered across folders
+      const adjustedBase = baseHit !== null ? baseScore + 0.5 : baseScore;
+      if (baseHit === null && pathHit === null) continue;
+      const best = adjustedBase >= pathScore ? baseHit : pathHit;
+      if (best === null) continue;
+      ranked.push({ item: file, match: best });
     }
     ranked.sort((a, b) => b.match.score - a.match.score);
     return ranked.slice(0, MAX_SUGGESTIONS).map((r) => r.item);
