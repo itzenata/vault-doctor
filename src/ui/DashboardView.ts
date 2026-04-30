@@ -6,6 +6,10 @@ import type {
   VaultDoctorPluginWithActions,
 } from "../actions";
 import { ALL_RULES } from "../rules";
+import { ShowAllModal } from "./ShowAllModal";
+import { GuidedCleanupModal } from "./GuidedCleanupModal";
+
+type SortMode = "impact" | "count" | "name";
 
 /**
  * The dashboard talks to both the engine (for scans) and the actions module
@@ -45,13 +49,13 @@ interface VerdictBand {
   color: string;
 }
 
-const NOT_IMPL = "Action not yet implemented";
-
 export class DashboardView extends ItemView {
   static readonly VIEW_TYPE = "vault-doctor-dashboard";
 
   private readonly plugin: DashboardPlugin;
   private currentResult: ScanResult | null = null;
+  private sortMode: SortMode = "impact";
+  private expandedRuleIds: Set<string> = new Set();
 
   constructor(leaf: WorkspaceLeaf, plugin: VaultDoctorPluginWithEngine) {
     super(leaf);
@@ -119,6 +123,15 @@ export class DashboardView extends ItemView {
     try {
       const result = await scanner.scan();
       this.currentResult = result;
+      // Reset expansion state for the new scan; auto-expand the first
+      // critical rule that has at least one issue (matches the mockup UX).
+      this.expandedRuleIds = new Set();
+      const firstCritIssue = result.issues.find(
+        (i) => i.severity === "critical",
+      );
+      if (firstCritIssue) {
+        this.expandedRuleIds.add(firstCritIssue.ruleId);
+      }
       this.render(result);
       new Notice(
         `Vault score: ${Math.round(result.score)} · ${result.issues.length} issues`,
@@ -159,7 +172,11 @@ export class DashboardView extends ItemView {
     settingsBtn.setAttr("aria-label", "Settings");
     this.applyIcon(settingsBtn, "settings", "cog");
     settingsBtn.addEventListener("click", () => {
-      new Notice(NOT_IMPL);
+      const settingHost = this.app as unknown as {
+        setting: { open(): void; openTabById(id: string): void };
+      };
+      settingHost.setting.open();
+      settingHost.setting.openTabById("vault-doctor");
     });
   }
 
@@ -260,12 +277,15 @@ export class DashboardView extends ItemView {
     label.createSpan({ text: "Issues" });
 
     const right = label.createSpan({ cls: "vd-section-label-right" });
-    right.appendText("Sort by impact ");
+    right.appendText(`Sort by ${this.sortMode} `);
     const link = right.createEl("a", { text: "change ↕" });
     link.setAttr("href", "#");
     link.addEventListener("click", (evt) => {
       evt.preventDefault();
-      new Notice(NOT_IMPL);
+      const order: SortMode[] = ["impact", "count", "name"];
+      const idx = order.indexOf(this.sortMode);
+      this.sortMode = order[(idx + 1) % order.length];
+      this.render(this.currentResult);
     });
   }
 
@@ -278,29 +298,30 @@ export class DashboardView extends ItemView {
       count: issues.filter((i) => i.ruleId === rule.id).length,
     }));
 
-    // Sort: by severity (critical first), then by descending count.
+    // Sort according to current sortMode.
     rows.sort((a, b) => {
-      const sevDiff = SEV_ORDER[a.rule.severity] - SEV_ORDER[b.rule.severity];
-      if (sevDiff !== 0) return sevDiff;
-      return b.count - a.count;
+      switch (this.sortMode) {
+        case "count":
+          return (
+            b.count - a.count || a.rule.name.localeCompare(b.rule.name)
+          );
+        case "name":
+          return a.rule.name.localeCompare(b.rule.name);
+        case "impact":
+        default: {
+          const sevDiff =
+            SEV_ORDER[a.rule.severity] - SEV_ORDER[b.rule.severity];
+          if (sevDiff !== 0) return sevDiff;
+          return b.count - a.count;
+        }
+      }
     });
 
     // Hide rules with 0 issues UNLESS we're in empty state.
     const visible = result === null ? rows : rows.filter((r) => r.count > 0);
 
-    // Auto-expand the first critical rule with at least one issue.
-    let firstCriticalWithIssues: string | null = null;
-    if (result !== null) {
-      for (const r of visible) {
-        if (r.rule.severity === "critical" && r.count > 0) {
-          firstCriticalWithIssues = r.rule.id;
-          break;
-        }
-      }
-    }
-
     for (const { rule, count } of visible) {
-      const expanded = rule.id === firstCriticalWithIssues;
+      const expanded = this.expandedRuleIds.has(rule.id);
       this.renderRow(table, rule, count, expanded);
       if (expanded) {
         const ruleIssues = issues.filter((i) => i.ruleId === rule.id);
@@ -330,7 +351,12 @@ export class DashboardView extends ItemView {
     rowEl.createSpan({ cls: "vd-row-arrow", text: "›" });
 
     rowEl.addEventListener("click", () => {
-      new Notice(NOT_IMPL);
+      if (this.expandedRuleIds.has(rule.id)) {
+        this.expandedRuleIds.delete(rule.id);
+      } else {
+        this.expandedRuleIds.add(rule.id);
+      }
+      this.render(this.currentResult);
     });
   }
 
@@ -381,7 +407,11 @@ export class DashboardView extends ItemView {
       text: "Show all",
     });
     showAllBtn.addEventListener("click", () => {
-      new Notice("Show all view not yet implemented");
+      new ShowAllModal(this.app, rule, issues, {
+        onAction: async (actionId, scope) => {
+          await this.runAction(actionId, scope, { rescan: true });
+        },
+      }).open();
     });
 
     const whitelistBtn = actions.createEl("button", {
@@ -427,7 +457,15 @@ export class DashboardView extends ItemView {
     cta.appendText(" ");
     cta.createSpan({ cls: "vd-kbd-mini", text: "⌘↵" });
     cta.addEventListener("click", () => {
-      new Notice("Guided cleanup not yet implemented");
+      if (!this.currentResult) {
+        new Notice("Run a scan first");
+        return;
+      }
+      new GuidedCleanupModal(
+        this.app,
+        this.plugin,
+        this.currentResult,
+      ).open();
     });
   }
 
