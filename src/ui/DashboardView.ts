@@ -396,10 +396,9 @@ export class DashboardView extends ItemView {
     primary.appendText(" ");
     primary.createSpan({ cls: "vd-kbd-mini", text: "⌘↵" });
     primary.addEventListener("click", () => {
-      // "fix" is intentionally unimplemented in v1: route the click into
-      // the dispatcher anyway so the day we ship a fixer the wiring is
-      // already correct, and surface a friendly Notice in the meantime.
-      void this.runAction("fix", issues, { rescan: false });
+      // The dispatcher walks the user through one SuggestModal per issue.
+      // Re-scan on success so the dashboard reflects the fixed links.
+      void this.runAction("fix", issues, { rescan: true });
     });
 
     const showAllBtn = actions.createEl("button", {
@@ -497,12 +496,8 @@ export class DashboardView extends ItemView {
         void this.runScan();
       }
     } catch (err) {
-      if (actionId === "fix") {
-        new Notice(
-          "Fix action coming soon — use Open or Whitelist for now",
-        );
-        return;
-      }
+      // Dispatcher aggregates per-issue errors into ActionResult.errors, so
+      // anything that escapes is genuinely unexpected — surface it raw.
       new Notice(`Action failed: ${String(err)}`);
     }
   }
