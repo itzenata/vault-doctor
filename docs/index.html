@@ -6,7 +6,7 @@
 <title>Vault Doctor — The Linter for your Second Brain</title>
 <meta name="description" content="An Obsidian plugin that audits your vault, gives it a health score, and fixes the worst issues in one click. Local-first, dry-run by default.">
 <meta property="og:title" content="Vault Doctor — The Linter for your Second Brain">
-<meta property="og:description" content="An Obsidian plugin that audits your vault and fixes the worst issues in one click. Pre-alpha.">
+<meta property="og:description" content="An Obsidian plugin that audits your vault and fixes the worst issues in one click. Alpha — sideload to try.">
 <meta property="og:image" content="./mockup.png">
 <meta property="og:type" content="website">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -117,10 +117,27 @@
   .rule { background: var(--bg); padding: 22px; }
   .rule-tag {
     font-size: 10px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase;
-    color: var(--good); margin-bottom: 10px;
+    color: var(--text-muted); margin-bottom: 10px;
     display: inline-flex; align-items: center; gap: 6px;
   }
-  .rule-tag::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--good); }
+  .rule-tag::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--text-muted); }
+  .rule-tag.tag-critical { color: var(--critical); }
+  .rule-tag.tag-critical::before { background: var(--critical); }
+  .rule-tag.tag-warning { color: #e0b34c; }
+  .rule-tag.tag-warning::before { background: #e0b34c; }
+  .rule-tag.tag-promise { color: var(--good); }
+  .rule-tag.tag-promise::before { background: var(--good); }
+
+  .code-block {
+    background: var(--bg-elev); border: 1px solid var(--border);
+    border-radius: 6px; padding: 14px 16px; margin: 18px 0 12px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 13px; line-height: 1.6; color: var(--text);
+    overflow-x: auto;
+  }
+  .code-block code { background: none; padding: 0; }
+  .caption-inline { font-size: 13px; color: var(--text-muted); margin-top: 6px; }
+  .caption-inline strong { color: var(--text); font-weight: 500; }
   .rule h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
   .rule p { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
   .rule code { background: var(--bg-input); padding: 1px 5px; border-radius: 3px; font-size: 12px; color: var(--text); }
@@ -159,7 +176,7 @@
   <section class="hero container" style="border-top: none;">
     <div class="brand">
       <span class="dot"></span>
-      <span>Pre-alpha · no installable build yet</span>
+      <span>Alpha · sideload to try · not yet in community store</span>
     </div>
     <h1>
       <span class="name">Vault Doctor</span>
@@ -173,16 +190,19 @@
       <a class="btn btn-primary" href="https://github.com/itzenata/vault-doctor">
         View on GitHub <span class="arrow">→</span>
       </a>
-      <span class="cta-note">MIT · local-first · spec &amp; mockup only</span>
+      <a class="btn btn-secondary" href="#try-it">
+        Try it (sideload)
+      </a>
+      <span class="cta-note">MIT · local-first · alpha</span>
     </div>
   </section>
 
-  <!-- Mockup -->
+  <!-- Screenshot -->
   <div class="mockup-wrap container">
     <div class="mockup-frame">
-      <img src="./mockup.png" alt="Vault Doctor dashboard mockup — health score 67/100, issues grouped by severity, one-click fixes." width="720">
+      <img src="./mockup.png" alt="Vault Doctor dashboard — health score, issues grouped by severity, one-click fixes." width="720">
     </div>
-    <p class="caption">Static preview of the planned dashboard.</p>
+    <p class="caption">The dashboard. Score on the left, issues grouped by severity, "Fix all" / "Show all" / "Whitelist" per rule.</p>
   </div>
 
   <!-- What it does -->
@@ -207,16 +227,54 @@
       <div class="feature">
         <span class="marker"></span>
         <div>
-          <h3>Guided cleanup, not blind automation</h3>
-          <p>Issues grouped by severity. Drill into any rule, see the exact note and offending line, fix all or skip — your call.</p>
+          <h3>Guided cleanup with per-issue control</h3>
+          <p>Issues grouped by severity. Pick a default action per rule, then expand to override on a per-note basis — archive these, delete that one, skip the third. One Apply.</p>
         </div>
       </div>
       <div class="feature good">
         <span class="marker"></span>
         <div>
-          <h3>Designed for large vaults</h3>
-          <p>Targeting 3,000+ note vaults where manual hygiene stops being feasible. Indexed scan, no editor freeze.</p>
+          <h3>Cross-rule deduplication</h3>
+          <p>A note flagged as empty, oversized, or duplicate isn't also re-flagged as orphan. The dashboard shows you the most-actionable label, not three labels for the same note.</p>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Detection rules -->
+  <section class="container">
+    <div class="section-label">Detection rules</div>
+    <h2>Ten rules. One scan. No surprises.</h2>
+    <div class="rules">
+      <div class="rule">
+        <span class="rule-tag tag-critical">Critical</span>
+        <h3>Broken links &amp; embeds</h3>
+        <p><code>[[wikilink]]</code> and <code>![[embed]]</code> that resolve to nothing. The most expensive bug in any aging vault.</p>
+      </div>
+      <div class="rule">
+        <span class="rule-tag tag-critical">Critical</span>
+        <h3>Exact duplicates</h3>
+        <p>Two notes with identical content. The older one wins as canonical, the copy is offered for deletion.</p>
+      </div>
+      <div class="rule">
+        <span class="rule-tag tag-warning">Warning</span>
+        <h3>Orphan &amp; empty notes</h3>
+        <p>No links in, no links out. Or under 50 characters. Likely abandoned drafts, archive candidates.</p>
+      </div>
+      <div class="rule">
+        <span class="rule-tag">Info</span>
+        <h3>Orphan attachments</h3>
+        <p>Image, PDF, audio that no note references. The "where did all this disk space go" rule.</p>
+      </div>
+      <div class="rule">
+        <span class="rule-tag">Info</span>
+        <h3>Inconsistent tags</h3>
+        <p><code>#projet</code>, <code>#Projet</code>, <code>#projets</code> — same logical tag in three forms. Auto-fix by normalising to the most-used variant.</p>
+      </div>
+      <div class="rule">
+        <span class="rule-tag">Info</span>
+        <h3>Stale, oversized, daily gaps</h3>
+        <p>Untouched 12+ months. Above 50k words. Missing days in a daily-note sequence. Soft signals, your call to act.</p>
       </div>
     </div>
   </section>
@@ -227,37 +285,41 @@
     <h2>Trust signals, not feature flags.</h2>
     <div class="rules">
       <div class="rule">
-        <span class="rule-tag">Promise</span>
+        <span class="rule-tag tag-promise">Promise</span>
         <h3>100% local</h3>
         <p>No network calls, ever. Your notes never leave your machine. The plugin has no telemetry and no remote config.</p>
       </div>
       <div class="rule">
-        <span class="rule-tag">Promise</span>
+        <span class="rule-tag tag-promise">Promise</span>
         <h3>Dry-run by default</h3>
         <p>Every rule previews the change before touching a single byte. You explicitly opt in to each fix.</p>
       </div>
       <div class="rule">
-        <span class="rule-tag">Promise</span>
+        <span class="rule-tag tag-promise">Promise</span>
         <h3>System trash only</h3>
         <p>No real <code>delete</code>. Files go to the OS trash — recoverable for as long as your trash retains them.</p>
       </div>
       <div class="rule">
-        <span class="rule-tag">Promise</span>
+        <span class="rule-tag tag-promise">Promise</span>
         <h3>Persistent whitelist</h3>
         <p>Mark a note or attachment as "intentional" once and Vault Doctor remembers. The whitelist lives in the note's frontmatter, version-controllable.</p>
       </div>
     </div>
   </section>
 
-  <!-- Status + CTA -->
-  <section class="container">
+  <!-- Try it -->
+  <section class="container" id="try-it">
     <div class="status-block">
-      <div class="section-label">Status</div>
-      <h2>Pre-alpha — looking for feedback.</h2>
+      <div class="section-label">Try it</div>
+      <h2>Sideload in three commands.</h2>
       <p class="lede">
-        No code yet, just a spec and the mockup above. Right now what shapes the v1 rule list is real reports from real vaults. If you've got a vault hygiene problem nothing currently solves for you, that's the most useful thing you can send.
+        Not yet in the community plugin store. To run the alpha against your own vault — or against the bundled test vault that triggers every rule once:
       </p>
-      <div class="cta-row">
+      <pre class="code-block"><code>git clone https://github.com/itzenata/vault-doctor.git
+cd vault-doctor &amp;&amp; npm install &amp;&amp; npm run build
+ln -sfn "$(pwd)" /path/to/your-vault/.obsidian/plugins/vault-doctor</code></pre>
+      <p class="caption-inline">Then in Obsidian: <strong>Settings → Community plugins → enable Vault Doctor</strong>, reload the app, run the scan command.</p>
+      <div class="cta-row" style="margin-top: 28px;">
         <a class="btn btn-primary" href="https://github.com/itzenata/vault-doctor">
           Star on GitHub <span class="arrow">→</span>
         </a>
