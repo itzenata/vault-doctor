@@ -476,9 +476,12 @@ export class DashboardView extends ItemView {
     primary.appendText(" ");
     primary.createSpan({ cls: "vd-kbd-mini", text: "⌘↵" });
     primary.addEventListener("click", () => {
-      // The dispatcher walks the user through one SuggestModal per issue.
-      // Re-scan on success so the dashboard reflects the fixed links.
-      void this.runAction("fix", issues, { rescan: true });
+      // "Fix all" routes each issue to its rule-suggested action: BROKEN-LINK
+      // and BROKEN-EMBED have an interactive "fix" handler, DUPLICATE-EXACT
+      // suggests "delete", STALE-NOTE/ORPHAN-NOTE suggest "archive", etc.
+      // Hardcoding "fix" here would error on any rule whose remedy isn't a
+      // wikilink rewrite — see actions/dispatcher.ts.
+      void this.runFixAll(issues);
     });
 
     const showAllBtn = actions.createEl("button", {
@@ -681,6 +684,40 @@ export class DashboardView extends ItemView {
    * @param opts.silent When true, suppresses the success Notice (used for
    *   navigation actions like `open`).
    */
+  /**
+   * Group `issues` by their rule-declared `suggestedAction` and dispatch each
+   * group as one batch. An issue with no `suggestedAction` falls back to
+   * "open" so the user can inspect it manually rather than seeing a hard
+   * error. The single rescan happens after every group has run so we don't
+   * re-scan in between (which would invalidate the issue references the next
+   * group is about to process).
+   */
+  private async runFixAll(issues: Issue[]): Promise<void> {
+    const byAction = new Map<
+      import("../types").ActionId,
+      Issue[]
+    >();
+    for (const issue of issues) {
+      const actionId = issue.suggestedAction ?? "open";
+      const list = byAction.get(actionId);
+      if (list === undefined) byAction.set(actionId, [issue]);
+      else list.push(issue);
+    }
+
+    let anyApplied = false;
+    for (const [actionId, group] of byAction.entries()) {
+      try {
+        const result = await this.plugin.actions.execute(actionId, group);
+        this.surfaceResult(actionId, result, false);
+        if (result.applied > 0) anyApplied = true;
+      } catch (err) {
+        new Notice(`Action failed: ${String(err)}`);
+      }
+    }
+
+    if (anyApplied) void this.runScan();
+  }
+
   private async runAction(
     actionId: import("../types").ActionId,
     scope: Issue | Issue[],
@@ -814,6 +851,8 @@ function pastTenseFor(actionId: import("../types").ActionId): string {
       return "Opened";
     case "fix":
       return "Fixed";
+    case "remove":
+      return "Removed";
   }
 }
 

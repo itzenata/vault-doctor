@@ -26,7 +26,11 @@ export const BROKEN_LINK_RULE: Rule = {
             line: link.line,
             targetPath: link.target,
           },
-          suggestedAction: "fix",
+          // Default to non-interactive "remove" so a dashboard "Fix all"
+          // doesn't pile N SuggestModals on top of the pane. Users who want
+          // to pick a replacement for a single issue can change the action
+          // explicitly (Show all → Fix, or Guided Cleanup per-issue override).
+          suggestedAction: "remove",
         });
       }
     }

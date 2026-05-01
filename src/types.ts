@@ -3,7 +3,13 @@
 
 export type Severity = "critical" | "warning" | "info";
 
-export type ActionId = "archive" | "delete" | "whitelist" | "fix" | "open";
+export type ActionId =
+  | "archive"
+  | "delete"
+  | "whitelist"
+  | "fix"
+  | "remove"
+  | "open";
 
 export interface Issue {
   ruleId: string;

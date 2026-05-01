@@ -793,16 +793,77 @@
 }
 
 /* Per-rule rows */
+.vault-doctor-pane.is-cleanup .vd-gc-rule-wrap {
+  border-bottom: 1px solid var(--vd-border);
+}
+.vault-doctor-pane.is-cleanup .vd-gc-rule-wrap:last-child {
+  border-bottom: none;
+}
 .vault-doctor-pane.is-cleanup .vd-gc-rule-row {
   display: grid;
-  grid-template-columns: 1fr 110px auto;
+  grid-template-columns: 14px 1fr 110px auto;
   gap: 10px;
   align-items: center;
   padding: 10px 14px;
-  border-bottom: 1px solid var(--vd-border);
+  cursor: pointer;
 }
-.vault-doctor-pane.is-cleanup .vd-gc-rule-row:last-child {
+.vault-doctor-pane.is-cleanup .vd-gc-rule-row:hover {
+  background: var(--vd-bg-row);
+}
+.vault-doctor-pane.is-cleanup .vd-gc-rule-expand {
+  color: var(--vd-text-muted);
+  font-size: 13px;
+  text-align: center;
+  user-select: none;
+}
+
+/* Per-issue rows (revealed by expanding a rule) */
+.vault-doctor-pane.is-cleanup .vd-gc-issue-list {
+  background: var(--vd-bg-row);
+  border-top: 1px solid var(--vd-border);
+}
+.vault-doctor-pane.is-cleanup .vd-gc-issue-list.hidden {
+  display: none;
+}
+.vault-doctor-pane.is-cleanup .vd-gc-issue-row {
+  display: grid;
+  grid-template-columns: 110px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 14px 6px 38px;
+  border-bottom: 1px solid var(--vd-border);
+  font-size: 12px;
+}
+.vault-doctor-pane.is-cleanup .vd-gc-issue-row:last-child {
   border-bottom: none;
+}
+.vault-doctor-pane.is-cleanup .vd-gc-issue-select {
+  background: var(--vd-bg-input);
+  color: var(--vd-text);
+  border: 1px solid var(--vd-border-strong);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.vault-doctor-pane.is-cleanup .vd-gc-issue-path {
+  color: var(--vd-text-muted);
+  font-size: 12px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.vault-doctor-pane.is-cleanup .vd-gc-issue-open {
+  color: var(--vd-text-faint);
+  cursor: pointer;
+  padding: 0 6px;
+  user-select: none;
+}
+.vault-doctor-pane.is-cleanup .vd-gc-issue-open:hover {
+  color: var(--vd-text);
 }
 .vault-doctor-pane.is-cleanup .vd-gc-rule-meta {
   display: flex;
@@ -848,7 +909,10 @@
 /* Disable interactive controls during apply (cosmetic — actual wiring is
    guarded in the JS dispatch). */
 .vault-doctor-pane.is-cleanup .vd-gc-root.is-applying .vd-gc-section-header,
-.vault-doctor-pane.is-cleanup .vd-gc-root.is-applying .vd-gc-action-select {
+.vault-doctor-pane.is-cleanup .vd-gc-root.is-applying .vd-gc-action-select,
+.vault-doctor-pane.is-cleanup .vd-gc-root.is-applying .vd-gc-issue-select,
+.vault-doctor-pane.is-cleanup .vd-gc-root.is-applying .vd-gc-rule-row,
+.vault-doctor-pane.is-cleanup .vd-gc-root.is-applying .vd-gc-issue-open {
   opacity: 0.6;
   pointer-events: none;
 }

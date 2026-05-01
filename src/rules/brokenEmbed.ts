@@ -26,7 +26,11 @@ export const BROKEN_EMBED_RULE: Rule = {
             line: link.line,
             targetPath: link.target,
           },
-          suggestedAction: "fix",
+          // Default to non-interactive "remove" — see brokenLink.ts for the
+          // full rationale. Embeds rarely have a sensible replacement (the
+          // referenced file is gone), so removing the dead embed is usually
+          // the right call.
+          suggestedAction: "remove",
         });
       }
     }

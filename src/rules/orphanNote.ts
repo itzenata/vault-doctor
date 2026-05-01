@@ -11,6 +11,8 @@ const PATH_EXCLUSIONS: readonly string[] = [
   "templates/",
   "_archive/",
   "excalidraw/",
+  "daily/",
+  "daily notes/",
 ];
 
 // Frontmatter keys whose truthy presence marks a note as plugin-managed,

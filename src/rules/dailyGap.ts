@@ -51,6 +51,9 @@ export const DAILY_GAP_RULE: Rule = {
   evaluate(ctx: ScanContext): Issue[] {
     const dailies: DailyEntry[] = [];
     for (const note of ctx.vault.notes.values()) {
+      // Archived dailies aren't part of the live sequence — skip them so a
+      // gap doesn't appear just because the user archived old daily notes.
+      if (note.path.toLowerCase().includes("_archive/")) continue;
       const time = parseDailyDate(note.basename);
       if (time === null) continue;
       dailies.push({ time, date: note.basename, note });

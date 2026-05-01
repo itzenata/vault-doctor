@@ -151,3 +151,7 @@ main.js
 main.js.map
 data.json
 
+# Vault Doctor runtime artefacts (auto-backup snapshots written when the
+# plugin runs against a vault — test-vault state, never plugin code).
+backups/
+

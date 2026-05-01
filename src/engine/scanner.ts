@@ -104,6 +104,7 @@ export class Scanner {
         outboundLinks: resolvedLinks,
         inboundLinks: [], // filled in pass 2
         tags: noteTags,
+        contentHash: hashBody(body),
       };
 
       notes.set(file.path, meta);
@@ -200,11 +201,13 @@ export class Scanner {
 
     const vault = await this.buildIndex(exclusions);
 
-    const issues: Issue[] = [];
+    const rawIssues: Issue[] = [];
     for (const rule of activeRules) {
       const ruleIssues = rule.evaluate({ vault, rule });
-      for (const issue of ruleIssues) issues.push(issue);
+      for (const issue of ruleIssues) rawIssues.push(issue);
     }
+
+    const issues = suppressShadowedIssues(rawIssues);
 
     // Score against `activeRules` so disabled rules don't inflate the
     // penalty potential — with all rules off, score stays at 100.
@@ -322,6 +325,66 @@ function normalizeTagEntries(entries: string[]): string[] {
     if (trimmed.length > 0) out.push(trimmed);
   }
   return out;
+}
+
+/**
+ * Drop ORPHAN-NOTE issues for notes that another, more-specific rule has
+ * already flagged. Rationale: a note that is empty / duplicate / oversized /
+ * tag-inconsistent is already going to be addressed; re-flagging it as an
+ * orphan adds dashboard noise without new information. STALE-NOTE is
+ * intentionally NOT a shadowing rule — staleness and orphanhood are
+ * independent signals and a note can deserve both labels.
+ */
+const ORPHAN_SHADOWING_RULES: ReadonlySet<string> = new Set([
+  "EMPTY-NOTE",
+  "DUPLICATE-EXACT",
+  "OVERSIZED-NOTE",
+  "TAG-INCONSISTENT",
+]);
+
+function suppressShadowedIssues(issues: Issue[]): Issue[] {
+  const shadowedNotes = new Set<string>();
+  for (const issue of issues) {
+    if (!ORPHAN_SHADOWING_RULES.has(issue.ruleId)) continue;
+    shadowedNotes.add(issue.notePath);
+    // DUPLICATE-EXACT reports only the non-canonical sibling; the canonical's
+    // path lives in `context.targetPath`. Shadow it too so neither member of
+    // the duplicate pair is re-flagged as ORPHAN-NOTE. Other shadowing rules
+    // either don't set `targetPath` (EMPTY-NOTE, OVERSIZED-NOTE) or use it for
+    // a non-path value (TAG-INCONSISTENT carries the canonical tag), so we
+    // gate on the rule id.
+    if (issue.ruleId === "DUPLICATE-EXACT") {
+      const target = issue.context?.targetPath;
+      if (target !== undefined) shadowedNotes.add(target);
+    }
+  }
+  if (shadowedNotes.size === 0) return issues;
+
+  const out: Issue[] = [];
+  for (const issue of issues) {
+    if (issue.ruleId === "ORPHAN-NOTE" && shadowedNotes.has(issue.notePath)) {
+      continue;
+    }
+    out.push(issue);
+  }
+  return out;
+}
+
+/**
+ * Hash a note body for duplicate detection. Whitespace is collapsed so
+ * trivial reformatting (added blank lines, trailing spaces) does not mask a
+ * true duplicate. FNV-1a 32-bit is sufficient: this hash is consumed only by
+ * the DUPLICATE-EXACT rule, which compares against same-length bodies — the
+ * accidental-collision risk on a single vault is vanishingly small.
+ */
+function hashBody(body: string): string {
+  const normalized = body.replace(/\s+/g, " ").trim();
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < normalized.length; i++) {
+    hash ^= normalized.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 /**

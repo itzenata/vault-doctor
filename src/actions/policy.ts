@@ -38,6 +38,11 @@ export function requiresConfirmation(
       return false;
     case "fix":
       return scopeSize > 1;
+    case "remove":
+      // Removing a broken link mutates note bodies. It's reversible (the
+      // link text is in git history if the user uses git) but a bulk batch
+      // is worth a single "you're about to drop N references" prompt.
+      return scopeSize > BULK_THRESHOLD;
   }
 }
 
